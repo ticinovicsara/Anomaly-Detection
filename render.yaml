@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: anomaly-detection-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: anomaly-detection-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    healthCheckPath: /health
+
+databases:
+  - name: anomaly-detection-db
+    databaseName: anomaly_detection
+    plan: free
