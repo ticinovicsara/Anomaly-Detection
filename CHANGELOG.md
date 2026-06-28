@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased] — 2026-06-28
+
+### Added
+
+- `window_labels()` in preprocessing — max-pooling point-level labels to window-level for LSTM evaluation alignment (Schmidl et al. 2022)
+- `load_yahoo()` in preprocessing — Yahoo S5 Webscope loader: drops timestamps and changepoint columns, warns on missing label column
+- `backend/conftest.py` — sys.path setup so pytest resolves the app module from any working directory
+- `backend/.env.example` — DATABASE_URL reference for local development
+- `backend/tests/test_integration.py` — 4 end-to-end pipeline tests (Isolation Forest + LSTM) without PostgreSQL
+- `TestWindowLabels` expanded to 5 tests; `TestLoadCreditcardAmountScaler` (3 tests); `TestLoadYahoo` (5 tests)
+
+### Fixed
+
+- `load_creditcard()` Amount `StandardScaler` not persisted: prediction previously fit a fresh scaler on prediction data, making anomaly scores incomparable to the training threshold; fixed with `amount_scaler_path` parameter (save on train, load on predict)
+- Yahoo dataset type falling through to `load_ecg()` in upload, train, and predict routers — column schema mismatch would raise `KeyError` at runtime
+- `_label_column()` in train.py: yahoo now correctly returns `"is_anomaly"` instead of `"label"`
+- `.gitignore`: `.env.*` pattern blocked `.env.example`; `!.env.example` exception added
+
+---
+
 ## [Unreleased] — 2026-06-23
 
 ### Added
