@@ -13,6 +13,7 @@ venv/
 env/
 .env
 .env.*
+!.env.example
 *.pkl
 *.h5
 
@@ -28,9 +29,10 @@ dist/
 # Data (large files, download separately)
 data/
 
-# Project context — contains local paths, not for version control
+# Project context — internal tooling state, not for version control
 CLAUDE.md
-docs/
+docs/TC/
+docs/wiki/
 
 # OS
 .DS_Store
