@@ -29,10 +29,9 @@ dist/
 # Data (large files, download separately)
 data/
 
-# Project context — internal tooling state, not for version control
+# Project context — contains local paths, not for version control
 CLAUDE.md
-docs/TC/
-docs/wiki/
+docs/
 
 # OS
 .DS_Store
