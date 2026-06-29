@@ -1,10 +1,13 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/anomaly_detection",
 )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
