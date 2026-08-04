@@ -41,6 +41,7 @@ Thumbs.db
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # Old project remnants (being deleted)
 Anomaly-Detection/

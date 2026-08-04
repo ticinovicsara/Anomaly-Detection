@@ -6,6 +6,7 @@ import { Card } from "../components/Card";
 import { Input } from "../components/Input";
 import { useToast } from "../components/Toast";
 import { auth, errorMessage } from "../api/client";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,6 +14,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const nav = useNavigate();
+  const { refresh } = useAuth();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -20,6 +22,7 @@ export default function Login() {
     try {
       const r = await auth.login(email, password);
       localStorage.setItem("token", r.data.access_token);
+      await refresh();
       toast({ tone: "success", title: "Welcome back" });
       nav("/");
     } catch (err) {
