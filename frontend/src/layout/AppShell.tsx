@@ -122,7 +122,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-7xl animate-fade-in">{children}</div>
+          <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
     </div>
