@@ -3,7 +3,7 @@ import { Check, X, RotateCcw, Filter } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge, severityTone } from "../components/Badge";
-import { FullPageSpinner } from "../components/Spinner";
+import { TableRowsSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import { anomalies as api, isCancelled, Anomaly } from "../api/client";
 
@@ -93,7 +93,9 @@ export default function Anomalies() {
 
       {/* List */}
       {loading ? (
-        <FullPageSpinner />
+        <Card className="p-0">
+          <TableRowsSkeleton />
+        </Card>
       ) : items.length === 0 ? (
         <Card>
           <p className="text-sm text-muted">No anomalies match this filter.</p>

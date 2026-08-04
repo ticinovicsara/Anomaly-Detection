@@ -20,7 +20,7 @@ import {
 import { Button } from "../components/Button";
 import { Card, StatCard } from "../components/Card";
 import { Badge, severityTone, statusTone } from "../components/Badge";
-import { FullPageSpinner } from "../components/Spinner";
+import { DashboardSkeleton } from "../components/Skeleton";
 import { anomalies as anomaliesApi, isCancelled, models as modelsApi, Anomaly, ModelInfo } from "../api/client";
 
 export default function Dashboard() {
@@ -47,7 +47,7 @@ export default function Dashboard() {
     return () => controller.abort();
   }, []);
 
-  if (loading) return <FullPageSpinner />;
+  if (loading) return <DashboardSkeleton />;
 
   const readyModels = models.filter((m) => m.status === "ready");
   const now = Date.now();
