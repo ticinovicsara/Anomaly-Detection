@@ -1,9 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_JWT_SECRET = "dev_secret_change_me"
+
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://anomaly:anomaly_dev@localhost:5432/anomaly_db"
-    JWT_SECRET: str = "dev_secret_change_me"
+    JWT_SECRET: str = DEFAULT_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 1440
 
