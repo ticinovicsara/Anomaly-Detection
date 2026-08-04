@@ -5,7 +5,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Input } from "../components/Input";
 import { useToast } from "../components/Toast";
-import { auth } from "../api/client";
+import { auth, errorMessage } from "../api/client";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -22,11 +22,11 @@ export default function Login() {
       localStorage.setItem("token", r.data.access_token);
       toast({ tone: "success", title: "Welcome back" });
       nav("/");
-    } catch (err: any) {
+    } catch (err) {
       toast({
         tone: "error",
         title: "Login failed",
-        message: err.response?.data?.detail || "Check your credentials",
+        message: errorMessage(err, "Check your credentials"),
       });
     } finally {
       setLoading(false);

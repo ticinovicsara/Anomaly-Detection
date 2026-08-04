@@ -5,7 +5,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { useToast } from "../components/Toast";
-import { datasets, models, Profile } from "../api/client";
+import { datasets, errorMessage, models, Profile } from "../api/client";
 
 type UploadedInfo = {
   dataset_id: number;
@@ -36,8 +36,8 @@ export default function Upload() {
       const r = await datasets.upload(file);
       setInfo(r.data);
       toast({ tone: "success", title: "File uploaded", message: `${r.data.n_rows} rows analyzed` });
-    } catch (err: any) {
-      toast({ tone: "error", title: "Upload failed", message: err.response?.data?.detail || "Try again" });
+    } catch (err) {
+      toast({ tone: "error", title: "Upload failed", message: errorMessage(err, "Try again") });
     } finally {
       setUploading(false);
     }
@@ -55,8 +55,8 @@ export default function Upload() {
         message: `${r.data.algorithm_chosen} — ${r.data.reason}`,
       });
       setTimeout(() => nav("/models"), 800);
-    } catch (err: any) {
-      toast({ tone: "error", title: "Could not start training", message: err.response?.data?.detail });
+    } catch (err) {
+      toast({ tone: "error", title: "Could not start training", message: errorMessage(err) });
     } finally {
       setTraining(false);
     }

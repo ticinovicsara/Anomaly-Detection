@@ -5,7 +5,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Input } from "../components/Input";
 import { useToast } from "../components/Toast";
-import { auth } from "../api/client";
+import { auth, errorMessage } from "../api/client";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -23,11 +23,11 @@ export default function Register() {
       localStorage.setItem("token", r.data.access_token);
       toast({ tone: "success", title: "Account created" });
       nav("/");
-    } catch (err: any) {
+    } catch (err) {
       toast({
         tone: "error",
         title: "Registration failed",
-        message: err.response?.data?.detail || "Try a different email",
+        message: errorMessage(err, "Try a different email"),
       });
     } finally {
       setLoading(false);

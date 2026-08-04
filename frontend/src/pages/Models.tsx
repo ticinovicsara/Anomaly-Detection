@@ -5,7 +5,7 @@ import { Card } from "../components/Card";
 import { Badge, statusTone } from "../components/Badge";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
-import { models as modelsApi, ModelInfo, PredictResult } from "../api/client";
+import { errorMessage, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
 
 export default function Models() {
   const [items, setItems] = useState<ModelInfo[]>([]);
@@ -39,8 +39,8 @@ export default function Models() {
         title: `${r.data.anomaly_count} anomalies detected`,
         message: `${r.data.total_windows} windows · rate ${(r.data.anomaly_rate * 100).toFixed(1)}%`,
       });
-    } catch (err: any) {
-      toast({ tone: "error", title: "Prediction failed", message: err.response?.data?.detail });
+    } catch (err) {
+      toast({ tone: "error", title: "Prediction failed", message: errorMessage(err) });
     } finally {
       setPredicting(null);
     }
@@ -165,7 +165,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatMini({ label, value, tone }: { label: string; value: any; tone?: "warning" }) {
+function StatMini({ label, value, tone }: { label: string; value: string | number; tone?: "warning" }) {
   return (
     <div className="rounded-xl border border-border bg-surface-2/50 p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted">{label}</p>

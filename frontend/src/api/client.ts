@@ -26,6 +26,13 @@ api.interceptors.response.use(
 
 export default api;
 
+export function errorMessage(err: unknown, fallback?: string): string | undefined {
+  if (axios.isAxiosError<{ detail?: string }>(err)) {
+    return err.response?.data?.detail ?? fallback;
+  }
+  return fallback;
+}
+
 export type Profile = {
   n_rows: number;
   n_features: number;
@@ -51,6 +58,15 @@ export type Threshold = {
   z_multiplier: number;
 };
 
+export type ModelMetrics = {
+  error?: string;
+  val_score_min?: number;
+  val_score_max?: number;
+  val_score_mean?: number;
+  n_train_samples?: number;
+  n_val_samples?: number;
+};
+
 export type ModelInfo = {
   id: number;
   dataset_id: number;
@@ -59,7 +75,7 @@ export type ModelInfo = {
   selection_reason: string | null;
   trained_at: string | null;
   drift_status: string;
-  metrics: Record<string, any>;
+  metrics: ModelMetrics;
   threshold: Threshold | null;
 };
 
