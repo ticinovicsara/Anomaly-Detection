@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+*.db
+.pytest_cache/
+
+# Env / secrets
+.env
+./backend/.env
+.env.local
+
+# ML artifacts
+models_storage/
+*.pkl
+*.joblib
+*.keras
+*.h5
+
+# Data
+data/
+uploads/
+*.csv
+!backend/tests/fixtures/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+build/
+
+# Old project remnants (being deleted)
+Anomaly-Detection/
