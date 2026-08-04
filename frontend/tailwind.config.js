@@ -29,9 +29,12 @@ export default {
         "slide-in": { from: { opacity: "0", transform: "translateX(100%)" }, to: { opacity: "1", transform: "translateX(0)" } },
         shimmer: { from: { backgroundPosition: "150% 0" }, to: { backgroundPosition: "-50% 0" } },
       },
+      transitionTimingFunction: {
+        "out-strong": "cubic-bezier(0.23, 1, 0.32, 1)",
+      },
       animation: {
-        "fade-in": "fade-in 200ms ease-out",
-        "slide-in": "slide-in 200ms ease-out",
+        "fade-in": "fade-in 200ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "slide-in": "slide-in 200ms cubic-bezier(0.23, 1, 0.32, 1)",
         shimmer: "shimmer 1.6s ease-in-out infinite",
       },
     },
