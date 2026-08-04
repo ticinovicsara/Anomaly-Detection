@@ -6,7 +6,7 @@ import { Slider } from "../components/Slider";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
 import { useTheme } from "../theme/ThemeProvider";
-import { models as modelsApi, thresholds, ModelInfo } from "../api/client";
+import { isCancelled, models as modelsApi, thresholds, ModelInfo } from "../api/client";
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -17,8 +17,9 @@ export default function Settings() {
   const toast = useToast();
 
   useEffect(() => {
+    const controller = new AbortController();
     modelsApi
-      .list()
+      .list({ signal: controller.signal })
       .then((r) => {
         const ready = r.data.filter((m) => m.status === "ready" && m.threshold);
         setItems(ready);
@@ -26,7 +27,13 @@ export default function Settings() {
           Object.fromEntries(ready.map((m) => [m.id, m.threshold!.z_multiplier]))
         );
       })
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!isCancelled(err)) throw err;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   const save = async (modelId: number) => {

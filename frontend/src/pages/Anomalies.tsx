@@ -5,7 +5,7 @@ import { Card } from "../components/Card";
 import { Badge, severityTone } from "../components/Badge";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
-import { anomalies as api, Anomaly } from "../api/client";
+import { anomalies as api, isCancelled, Anomaly } from "../api/client";
 
 const labels = [
   { value: "", label: "All" },
@@ -21,16 +21,19 @@ export default function Anomalies() {
   const [labelFilter, setLabelFilter] = useState("");
   const toast = useToast();
 
-  const load = () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     api
-      .list({ label: labelFilter || undefined, limit: 200 })
+      .list({ label: labelFilter || undefined, limit: 200 }, { signal: controller.signal })
       .then((r) => setItems(r.data))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    load();
+      .catch((err) => {
+        if (!isCancelled(err)) throw err;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [labelFilter]);
 
   const setLabel = async (id: number, label: string) => {

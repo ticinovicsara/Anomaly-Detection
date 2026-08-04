@@ -21,7 +21,7 @@ import { Button } from "../components/Button";
 import { Card, StatCard } from "../components/Card";
 import { Badge, severityTone, statusTone } from "../components/Badge";
 import { FullPageSpinner } from "../components/Spinner";
-import { anomalies as anomaliesApi, models as modelsApi, Anomaly, ModelInfo } from "../api/client";
+import { anomalies as anomaliesApi, isCancelled, models as modelsApi, Anomaly, ModelInfo } from "../api/client";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
@@ -29,12 +29,22 @@ export default function Dashboard() {
   const [recent, setRecent] = useState<Anomaly[]>([]);
 
   useEffect(() => {
-    Promise.all([modelsApi.list(), anomaliesApi.list({ limit: 30 })])
+    const controller = new AbortController();
+    Promise.all([
+      modelsApi.list({ signal: controller.signal }),
+      anomaliesApi.list({ limit: 30 }, { signal: controller.signal }),
+    ])
       .then(([m, a]) => {
         setModels(m.data);
         setRecent(a.data);
       })
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!isCancelled(err)) throw err;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   if (loading) return <FullPageSpinner />;

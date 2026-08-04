@@ -57,6 +57,12 @@ export function errorMessage(err: unknown, fallback?: string): string | undefine
   return fallback;
 }
 
+export function isCancelled(err: unknown): boolean {
+  return axios.isCancel(err);
+}
+
+type RequestOpts = { signal?: AbortSignal };
+
 export type Profile = {
   n_rows: number;
   n_features: number;
@@ -150,7 +156,7 @@ export const datasets = {
 export const models = {
   train: (datasetId: number) =>
     api.post<{ status: string; algorithm_chosen: string; reason: string }>(`/train/${datasetId}`),
-  list: () => api.get<ModelInfo[]>("/train/models"),
+  list: (opts?: RequestOpts) => api.get<ModelInfo[]>("/train/models", { signal: opts?.signal }),
   predict: (modelId: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
@@ -161,8 +167,8 @@ export const models = {
 };
 
 export const anomalies = {
-  list: (params?: { model_id?: number; label?: string; limit?: number }) =>
-    api.get<Anomaly[]>("/anomalies", { params }),
+  list: (params?: { model_id?: number; label?: string; limit?: number }, opts?: RequestOpts) =>
+    api.get<Anomaly[]>("/anomalies", { params, signal: opts?.signal }),
   label: (eventId: number, label: string, note?: string) =>
     api.patch<Anomaly>(`/anomalies/${eventId}`, { label, note }),
 };
