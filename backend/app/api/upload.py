@@ -33,7 +33,8 @@ async def upload_csv(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"File too large (max {MAX_CSV_BYTES // 1024 // 1024} MB)")
 
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
-    safe_name = f"user{user.id}_{uuid.uuid4().hex[:8]}_{file.filename}"
+    original_name = os.path.basename(file.filename).replace("/", "_").replace("\\", "_")
+    safe_name = f"user{user.id}_{uuid.uuid4().hex[:8]}_{original_name}"
     disk_path = os.path.join(settings.STORAGE_PATH, safe_name)
     with open(disk_path, "wb") as f:
         f.write(contents)
