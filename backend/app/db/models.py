@@ -117,7 +117,7 @@ class Notification(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
-    event_id = Column(Integer, ForeignKey("anomaly_events.id", ondelete="SET NULL"))
+    event_id = Column(Integer, ForeignKey("anomaly_events.id", ondelete="SET NULL"), index=True)
     channel = Column(String(20), nullable=False)  # email | push | inapp
     status = Column(String(20), default="pending")  # pending | sent | failed
     sent_at = Column(DateTime)
@@ -141,8 +141,8 @@ class UploadLog(Base):
     __tablename__ = "upload_logs"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
-    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="SET NULL"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="SET NULL"), index=True)
     filename = Column(String(255))
     size_bytes = Column(Integer)
     status = Column(String(20))  # ok | rejected
