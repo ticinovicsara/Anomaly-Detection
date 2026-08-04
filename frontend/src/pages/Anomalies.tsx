@@ -34,11 +34,14 @@ export default function Anomalies() {
   }, [labelFilter]);
 
   const setLabel = async (id: number, label: string) => {
+    const previous = items;
+    setItems((prev) => prev.map((a) => (a.id === id ? { ...a, label } : a)));
     try {
       const r = await api.label(id, label);
       setItems((prev) => prev.map((a) => (a.id === id ? r.data : a)));
       toast({ tone: "success", title: `Marked as ${label.replace("_", " ")}` });
     } catch {
+      setItems(previous);
       toast({ tone: "error", title: "Could not update" });
     }
   };
@@ -129,6 +132,7 @@ export default function Anomalies() {
                           size="sm"
                           onClick={() => setLabel(a.id, "confirmed")}
                           title="Confirm"
+                          aria-label="Confirm anomaly"
                         >
                           <Check className="h-3.5 w-3.5 text-success" />
                         </Button>
@@ -137,6 +141,7 @@ export default function Anomalies() {
                           size="sm"
                           onClick={() => setLabel(a.id, "false_positive")}
                           title="Mark false positive"
+                          aria-label="Mark as false positive"
                         >
                           <X className="h-3.5 w-3.5 text-danger" />
                         </Button>
@@ -145,6 +150,7 @@ export default function Anomalies() {
                           size="sm"
                           onClick={() => setLabel(a.id, "unlabeled")}
                           title="Reset"
+                          aria-label="Reset label"
                         >
                           <RotateCcw className="h-3.5 w-3.5 text-muted" />
                         </Button>
