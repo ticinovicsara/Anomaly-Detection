@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 
@@ -11,6 +12,8 @@ from app.core.limiter import limiter
 from app.db.models import Dataset, UploadLog, User
 from app.db.session import get_db
 from app.ml_core.profiler import profile_dataset
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -47,6 +50,7 @@ def upload_csv(
     try:
         df = pd.read_csv(disk_path)
     except Exception as exc:
+        logger.exception("Failed to parse uploaded CSV for user %s (%s)", user.id, file.filename)
         db.add(UploadLog(user_id=user.id, filename=file.filename, size_bytes=size,
                          status="rejected", reason=f"parse_error: {exc}"[:255]))
         db.commit()

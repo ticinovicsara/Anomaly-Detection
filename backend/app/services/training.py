@@ -3,6 +3,7 @@
 Single global lock (`_TRAIN_LOCK`) prevents two heavy trainings running at once
 in the same process — see guardrail #4 in Implementation_Plan.md §12.
 """
+import logging
 import os
 import threading
 from datetime import datetime
@@ -25,6 +26,8 @@ from app.ml_core.preprocessing import (
     temporal_split,
 )
 from app.ml_core.threshold import calibrate_threshold
+
+logger = logging.getLogger(__name__)
 
 _TRAIN_LOCK = threading.Lock()
 
@@ -116,6 +119,7 @@ def _train_impl(dataset_id: int, user_id: int) -> None:
         db.add(threshold)
         db.commit()
     except Exception as exc:  # noqa: BLE001 - want to record any failure
+        logger.exception("Training failed for dataset %s, user %s", dataset_id, user_id)
         db.rollback()
         if model_row is not None:
             model_row.status = "failed"
