@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import current_user
 from app.db.models import Dataset, Model, User
@@ -33,7 +33,13 @@ def train(
 
 @router.get("/models", tags=["models"])
 def list_models(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.query(Model).filter(Model.user_id == user.id).order_by(Model.created_at.desc()).all()
+    rows = (
+        db.query(Model)
+        .options(joinedload(Model.threshold))
+        .filter(Model.user_id == user.id)
+        .order_by(Model.created_at.desc())
+        .all()
+    )
     out = []
     for m in rows:
         thr = m.threshold
