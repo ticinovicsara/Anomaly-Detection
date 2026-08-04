@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: "/api",
   timeout: 30000,
 });
 
@@ -45,12 +45,15 @@ api.interceptors.response.use(
       }
     }
     return Promise.reject(err);
-  }
+  },
 );
 
 export default api;
 
-export function errorMessage(err: unknown, fallback?: string): string | undefined {
+export function errorMessage(
+  err: unknown,
+  fallback?: string,
+): string | undefined {
   if (axios.isAxiosError<{ detail?: string }>(err)) {
     return err.response?.data?.detail ?? fallback;
   }
@@ -69,7 +72,10 @@ export type Profile = {
   autocorr_lag1?: number | null;
   adf_pvalue?: number | null;
   fft_peak?: number | null;
-  column_stats?: Record<string, { mean: number; std: number; min: number; max: number }>;
+  column_stats?: Record<
+    string,
+    { mean: number; std: number; min: number; max: number }
+  >;
   error?: string;
 };
 
@@ -129,14 +135,22 @@ export type PredictResult = {
   total_windows: number;
   anomaly_count: number;
   anomaly_rate: number;
-  results: { batch_id: string; window_idx: number; score: number; is_anomaly: boolean }[];
+  results: {
+    batch_id: string;
+    window_idx: number;
+    score: number;
+    is_anomaly: boolean;
+  }[];
 };
 
 export const auth = {
   register: (email: string, password: string) =>
     api.post("/auth/register", { email, password }),
   login: (email: string, password: string) =>
-    api.post<{ access_token: string; token_type: string }>("/auth/login", { email, password }),
+    api.post<{ access_token: string; token_type: string }>("/auth/login", {
+      email,
+      password,
+    }),
   me: () => api.get<{ id: number; email: string }>("/auth/me"),
 };
 
@@ -144,19 +158,24 @@ export const datasets = {
   upload: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return api.post<{ dataset_id: number; name: string; n_rows: number; n_features: number; profile: Profile }>(
-      "/upload",
-      fd,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
+    return api.post<{
+      dataset_id: number;
+      name: string;
+      n_rows: number;
+      n_features: number;
+      profile: Profile;
+    }>("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
   },
   list: () => api.get<Dataset[]>("/upload"),
 };
 
 export const models = {
   train: (datasetId: number) =>
-    api.post<{ status: string; algorithm_chosen: string; reason: string }>(`/train/${datasetId}`),
-  list: (opts?: RequestOpts) => api.get<ModelInfo[]>("/train/models", { signal: opts?.signal }),
+    api.post<{ status: string; algorithm_chosen: string; reason: string }>(
+      `/train/${datasetId}`,
+    ),
+  list: (opts?: RequestOpts) =>
+    api.get<ModelInfo[]>("/train/models", { signal: opts?.signal }),
   predict: (modelId: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
@@ -167,16 +186,24 @@ export const models = {
 };
 
 export const anomalies = {
-  list: (params?: { model_id?: number; label?: string; limit?: number }, opts?: RequestOpts) =>
-    api.get<Anomaly[]>("/anomalies", { params, signal: opts?.signal }),
+  list: (
+    params?: { model_id?: number; label?: string; limit?: number },
+    opts?: RequestOpts,
+  ) => api.get<Anomaly[]>("/anomalies", { params, signal: opts?.signal }),
   label: (eventId: number, label: string, note?: string) =>
     api.patch<Anomaly>(`/anomalies/${eventId}`, { label, note }),
 };
 
 export const thresholds = {
-  get: (modelId: number) => api.get<Threshold & { calibrated_at: string }>(`/settings/threshold/${modelId}`),
+  get: (modelId: number) =>
+    api.get<Threshold & { calibrated_at: string }>(
+      `/settings/threshold/${modelId}`,
+    ),
   update: (modelId: number, z: number) =>
-    api.patch<Threshold & { calibrated_at: string }>(`/settings/threshold/${modelId}`, {
-      z_multiplier: z,
-    }),
+    api.patch<Threshold & { calibrated_at: string }>(
+      `/settings/threshold/${modelId}`,
+      {
+        z_multiplier: z,
+      },
+    ),
 };

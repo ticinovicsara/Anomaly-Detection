@@ -12,7 +12,7 @@ env/
 
 # Env / secrets
 .env
-./backend/.env
+*.env
 .env.local
 
 # ML artifacts
