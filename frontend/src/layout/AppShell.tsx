@@ -63,7 +63,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150 ease-out",
                   isActive
                     ? "bg-accent/10 text-accent"
                     : "text-muted hover:bg-surface-2 hover:text-text"

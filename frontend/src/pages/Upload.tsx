@@ -87,7 +87,7 @@ export default function Upload() {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed p-12 transition-all ${
+          className={`flex cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed p-12 transition-colors duration-150 ease-out ${
             dragging ? "border-accent bg-accent/5" : "border-border hover:border-accent/60 hover:bg-surface-2/50"
           }`}
         >
