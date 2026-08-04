@@ -49,6 +49,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button
             className="lg:hidden text-muted hover:text-text"
             onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
           >
             <X className="h-5 w-5" />
           </button>
@@ -89,6 +90,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button
             className="lg:hidden text-muted hover:text-text"
             onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -97,6 +99,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <button
               onClick={toggle}
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
               className="rounded-xl p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text"
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -110,6 +113,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <button
               onClick={logout}
               title="Sign out"
+              aria-label="Sign out"
               className="rounded-xl p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text"
             >
               <LogOut className="h-4 w-4" />

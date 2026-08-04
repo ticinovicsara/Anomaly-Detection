@@ -1,4 +1,4 @@
-import { InputHTMLAttributes } from "react";
+import { InputHTMLAttributes, useId } from "react";
 import { cn } from "../lib/cn";
 
 interface Props extends InputHTMLAttributes<HTMLInputElement> {
@@ -22,17 +22,21 @@ export function Slider({
   className,
 }: Props) {
   const pct = ((value - min) / (max - min)) * 100;
+  const inputId = useId();
   return (
     <div className={cn("w-full", className)}>
       {label && (
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-sm font-medium text-text">{label}</label>
+          <label htmlFor={inputId} className="text-sm font-medium text-text">
+            {label}
+          </label>
           <span className="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-mono text-accent">
             {formatter ? formatter(value) : value}
           </span>
         </div>
       )}
       <input
+        id={inputId}
         type="range"
         min={min}
         max={max}
