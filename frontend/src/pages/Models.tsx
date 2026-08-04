@@ -5,7 +5,7 @@ import { Card } from "../components/Card";
 import { Badge, statusTone } from "../components/Badge";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
-import { errorMessage, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
+import { errorMessage, isCancelled, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
 
 export default function Models() {
   const [items, setItems] = useState<ModelInfo[]>([]);
@@ -16,15 +16,44 @@ export default function Models() {
   const [targetModel, setTargetModel] = useState<number | null>(null);
   const toast = useToast();
 
-  const fetchList = () => modelsApi.list().then((r) => setItems(r.data));
-
   useEffect(() => {
-    fetchList().finally(() => setLoading(false));
-    const t = setInterval(() => {
-      // if any training/pending, keep polling
-      modelsApi.list().then((r) => setItems(r.data));
-    }, 3000);
-    return () => clearInterval(t);
+    const controller = new AbortController();
+    let intervalId: number | undefined;
+    const isPending = (list: ModelInfo[]) =>
+      list.some((m) => m.status === "training" || m.status === "pending");
+
+    const poll = () => {
+      modelsApi
+        .list({ signal: controller.signal })
+        .then((r) => {
+          setItems(r.data);
+          if (!isPending(r.data) && intervalId !== undefined) {
+            clearInterval(intervalId);
+            intervalId = undefined;
+          }
+        })
+        .catch((err) => {
+          if (!isCancelled(err)) throw err;
+        });
+    };
+
+    modelsApi
+      .list({ signal: controller.signal })
+      .then((r) => {
+        setItems(r.data);
+        if (isPending(r.data)) intervalId = window.setInterval(poll, 3000);
+      })
+      .catch((err) => {
+        if (!isCancelled(err)) throw err;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => {
+      controller.abort();
+      if (intervalId !== undefined) clearInterval(intervalId);
+    };
   }, []);
 
   const runPredict = async (file: File) => {
