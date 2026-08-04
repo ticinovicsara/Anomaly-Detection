@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Check, X, RotateCcw, Filter } from "lucide-react";
+import { Check, X, RotateCcw, Filter, ShieldCheck } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge, severityTone } from "../components/Badge";
+import { EmptyState } from "../components/EmptyState";
 import { TableRowsSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import { anomalies as api, isCancelled, Anomaly } from "../api/client";
@@ -98,7 +99,15 @@ export default function Anomalies() {
         </Card>
       ) : items.length === 0 ? (
         <Card>
-          <p className="text-sm text-muted">No anomalies match this filter.</p>
+          <EmptyState
+            icon={ShieldCheck}
+            title={labelFilter ? "No matches for this filter" : "No anomalies yet"}
+            message={
+              labelFilter
+                ? "Try a different label, or clear the filter to see everything."
+                : "Anomalies will show up here once a model flags something in your data."
+            }
+          />
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden">

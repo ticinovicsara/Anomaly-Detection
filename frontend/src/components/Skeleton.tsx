@@ -2,7 +2,14 @@ import { cn } from "../lib/cn";
 import { Card } from "./Card";
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-lg bg-surface-2", className)} />;
+  return (
+    <div
+      className={cn(
+        "rounded-lg bg-surface-2 bg-[length:150%_100%] bg-gradient-to-r from-surface-2 via-surface to-surface-2 animate-shimmer",
+        className
+      )}
+    />
+  );
 }
 
 export function DashboardSkeleton() {

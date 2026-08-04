@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Brain, PlayCircle, Upload as UploadIcon } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge, statusTone } from "../components/Badge";
+import { EmptyState } from "../components/EmptyState";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
 import { errorMessage, isCancelled, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
@@ -88,9 +90,18 @@ export default function Models() {
 
       {items.length === 0 ? (
         <Card>
-          <p className="text-sm text-muted">
-            No models yet. Upload data on the <a className="text-accent hover:underline" href="/upload">Upload</a> page.
-          </p>
+          <EmptyState
+            icon={Brain}
+            title="No models yet"
+            message="Upload a CSV and start training to see your models here."
+            action={
+              <Link to="/upload">
+                <Button size="sm" variant="secondary" icon={<UploadIcon className="h-3.5 w-3.5" />}>
+                  Upload data
+                </Button>
+              </Link>
+            }
+          />
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

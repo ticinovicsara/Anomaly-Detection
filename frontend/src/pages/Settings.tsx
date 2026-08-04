@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Save, Sliders, Sun, Moon } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { EmptyState } from "../components/EmptyState";
 import { Slider } from "../components/Slider";
 import { FullPageSpinner } from "../components/Spinner";
 import { useToast } from "../components/Toast";
@@ -109,7 +110,11 @@ export default function Settings() {
           <FullPageSpinner />
         ) : items.length === 0 ? (
           <Card>
-            <p className="text-sm text-muted">Train a model first to configure its threshold.</p>
+            <EmptyState
+              icon={Sliders}
+              title="No trained models yet"
+              message="Train a model first to configure its detection threshold."
+            />
           </Card>
         ) : (
           <div className="space-y-4">
