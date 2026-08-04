@@ -11,7 +11,7 @@ router = APIRouter(prefix="/predict", tags=["predict"])
 
 
 @router.post("/{model_id}")
-async def predict(
+def predict(
     model_id: int,
     file: UploadFile = File(...),
     user: User = Depends(current_user),

@@ -17,7 +17,7 @@ MAX_CSV_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def upload_csv(
+def upload_csv(
     file: UploadFile = File(...),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -25,7 +25,7 @@ async def upload_csv(
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only .csv files are accepted")
 
-    contents = await file.read()
+    contents = file.file.read()
     size = len(contents)
     if size == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
