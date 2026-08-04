@@ -1,5 +1,6 @@
 import { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { useCountUp } from "../hooks/useCountUp";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;
@@ -41,12 +42,18 @@ export function StatCard({
     danger: "text-danger",
   }[tone];
 
+  const numericValue = typeof value === "number" ? value : null;
+  const animatedValue = useCountUp(numericValue ?? 0);
+  const displayValue = numericValue !== null ? animatedValue : value;
+
   return (
     <Card hoverable>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
-          <p className={cn("mt-2 text-3xl font-semibold tracking-tight", toneClasses)}>{value}</p>
+          <p className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", toneClasses)}>
+            {displayValue}
+          </p>
           {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
         </div>
         {icon && (
