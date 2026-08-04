@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.limiter import limiter
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -35,6 +36,7 @@ app.dependency_overrides[get_db] = override_get_db
 def _reset_db():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    limiter.reset()
     yield
     Base.metadata.drop_all(engine)
 
@@ -102,3 +104,11 @@ def test_upload_rejects_non_csv(client, token):
 def test_unauth_endpoint_requires_token(client):
     r = client.get("/upload")
     assert r.status_code == 422  # missing Authorization header
+
+
+def test_register_rate_limited_after_5_per_minute(client):
+    for i in range(5):
+        r = client.post("/auth/register", json={"email": f"rl{i}@x.com", "password": "abcdef"})
+        assert r.status_code == 201
+    r = client.post("/auth/register", json={"email": "rl6@x.com", "password": "abcdef"})
+    assert r.status_code == 429

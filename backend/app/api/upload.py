@@ -2,11 +2,12 @@ import os
 import uuid
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.db.models import Dataset, UploadLog, User
 from app.db.session import get_db
 from app.ml_core.profiler import profile_dataset
@@ -17,7 +18,9 @@ MAX_CSV_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 def upload_csv(
+    request: Request,
     file: UploadFile = File(...),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
