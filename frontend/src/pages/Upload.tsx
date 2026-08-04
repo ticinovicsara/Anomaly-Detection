@@ -109,87 +109,96 @@ export default function Upload() {
         </label>
       </Card>
 
-      {/* Result */}
-      {info && (
-        <div className="grid gap-6 lg:grid-cols-2 animate-fade-in">
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-surface-2 p-2 text-accent">
-                <FileText className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-text">{info.name}</p>
-                <p className="text-xs text-muted">
-                  {info.n_rows.toLocaleString()} rows · {info.n_features} columns
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-2">
-              <ProfileRow label="Rows" value={info.n_rows.toLocaleString()} />
-              <ProfileRow label="Numeric features" value={String(info.profile.n_features)} />
-              <ProfileRow
-                label="Autocorrelation (lag 1)"
-                value={fmt(info.profile.autocorr_lag1)}
-                hint="closer to 1 → strongly sequential"
-              />
-              <ProfileRow
-                label="Stationarity p-value"
-                value={fmt(info.profile.adf_pvalue)}
-                hint="< 0.05 → stationary"
-              />
-              <ProfileRow
-                label="Dominant frequency"
-                value={fmt(info.profile.fft_peak, 4)}
-                hint="periodic patterns"
-              />
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-accent/10 p-2 text-accent">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-text">Model recommendation</p>
-                <p className="text-xs text-muted">
-                  Based on the data profile — you don&apos;t have to choose.
-                </p>
-              </div>
-            </div>
-
-            {chosen ? (
-              <div className="mt-5">
-                <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
-                  <div className="flex items-center gap-2">
-                    <Brain className="h-4 w-4 text-accent" />
-                    <span className="text-sm font-semibold text-text">{chosen.algorithm_chosen}</span>
-                    <Badge tone="accent">selected</Badge>
+      {/* Result -- grid-rows 0fr/1fr trick animates the reveal's height smoothly
+          instead of the layout just popping taller when info arrives. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          info ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          {info && (
+            <div className="grid gap-6 lg:grid-cols-2 animate-fade-in pt-1">
+              <Card>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-surface-2 p-2 text-accent">
+                    <FileText className="h-5 w-5" />
                   </div>
-                  <p className="mt-2 text-xs text-muted">{chosen.reason}</p>
+                  <div>
+                    <p className="text-sm font-medium text-text">{info.name}</p>
+                    <p className="text-xs text-muted">
+                      {info.n_rows.toLocaleString()} rows · {info.n_features} columns
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="mt-5">
-                <p className="text-sm text-muted">
-                  Click <b>Start training</b> — the system will profile your data, select the best model
-                  (Isolation Forest or LSTM), train it, and calibrate a personalized threshold.
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    onClick={startTraining}
-                    loading={training}
-                    icon={<ArrowRight className="h-4 w-4" />}
-                  >
-                    Start training
-                  </Button>
+
+                <div className="mt-5 space-y-2">
+                  <ProfileRow label="Rows" value={info.n_rows.toLocaleString()} />
+                  <ProfileRow label="Numeric features" value={String(info.profile.n_features)} />
+                  <ProfileRow
+                    label="Autocorrelation (lag 1)"
+                    value={fmt(info.profile.autocorr_lag1)}
+                    hint="closer to 1 → strongly sequential"
+                  />
+                  <ProfileRow
+                    label="Stationarity p-value"
+                    value={fmt(info.profile.adf_pvalue)}
+                    hint="< 0.05 → stationary"
+                  />
+                  <ProfileRow
+                    label="Dominant frequency"
+                    value={fmt(info.profile.fft_peak, 4)}
+                    hint="periodic patterns"
+                  />
                 </div>
-              </div>
-            )}
-          </Card>
+              </Card>
+
+              <Card>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-accent/10 p-2 text-accent">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-text">Model recommendation</p>
+                    <p className="text-xs text-muted">
+                      Based on the data profile — you don&apos;t have to choose.
+                    </p>
+                  </div>
+                </div>
+
+                {chosen ? (
+                  <div className="mt-5">
+                    <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+                      <div className="flex items-center gap-2">
+                        <Brain className="h-4 w-4 text-accent" />
+                        <span className="text-sm font-semibold text-text">{chosen.algorithm_chosen}</span>
+                        <Badge tone="accent">selected</Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted">{chosen.reason}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-5">
+                    <p className="text-sm text-muted">
+                      Click <b>Start training</b> — the system will profile your data, select the best model
+                      (Isolation Forest or LSTM), train it, and calibrate a personalized threshold.
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        onClick={startTraining}
+                        loading={training}
+                        icon={<ArrowRight className="h-4 w-4" />}
+                      >
+                        Start training
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
