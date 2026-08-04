@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "/api",
@@ -11,13 +11,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 300;
+
+type RetryableConfig = AxiosRequestConfig & { _retryCount?: number };
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 api.interceptors.response.use(
   (r) => r,
-  (err) => {
+  async (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
+      }
+      return Promise.reject(err);
+    }
+
+    const config = err.config as RetryableConfig | undefined;
+    const status = err.response?.status;
+    // Only retry idempotent GETs on server errors -- retrying POST/PATCH
+    // (upload, train, label) on a 5xx risks duplicate side effects.
+    const isServerError = typeof status === "number" && status >= 500;
+    const isGet = (config?.method ?? "get").toLowerCase() === "get";
+    if (config && isServerError && isGet) {
+      config._retryCount = (config._retryCount ?? 0) + 1;
+      if (config._retryCount <= MAX_RETRIES) {
+        await wait(RETRY_BASE_DELAY_MS * 2 ** (config._retryCount - 1));
+        return api(config);
       }
     }
     return Promise.reject(err);
