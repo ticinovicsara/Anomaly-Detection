@@ -31,6 +31,8 @@ async def upload_csv(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
     if size > MAX_CSV_BYTES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"File too large (max {MAX_CSV_BYTES // 1024 // 1024} MB)")
+    if b"\x00" in contents[:8192]:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File does not look like a text CSV")
 
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
     original_name = os.path.basename(file.filename).replace("/", "_").replace("\\", "_")

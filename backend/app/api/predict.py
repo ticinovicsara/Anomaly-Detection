@@ -29,6 +29,11 @@ async def predict(
     if not threshold:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Model has no calibrated threshold")
 
+    head = file.file.read(8192)
+    file.file.seek(0)
+    if b"\x00" in head:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File does not look like a text CSV")
+
     try:
         df = pd.read_csv(file.file)
     except Exception as exc:
