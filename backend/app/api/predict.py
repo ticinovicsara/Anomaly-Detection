@@ -44,7 +44,7 @@ async def predict(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
 
-    anomaly_count = persist_predictions(db, user.id, model_row.id, results)
+    anomaly_count = persist_predictions(db, user.id, model_row.id, results, threshold.epsilon)
 
     return {
         "batch_id": batch_id,

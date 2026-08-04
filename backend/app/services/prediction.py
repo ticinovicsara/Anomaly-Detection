@@ -39,7 +39,7 @@ def run_prediction(model_row: Model, threshold: Threshold, df: pd.DataFrame) -> 
     return batch_id, results
 
 
-def persist_predictions(db, user_id: int, model_id: int, results: List[dict]) -> int:
+def persist_predictions(db, user_id: int, model_id: int, results: List[dict], epsilon: float) -> int:
     """Save predictions + emit AnomalyEvents for scores above threshold. Returns anomaly count."""
     anomaly_count = 0
     for r in results:
@@ -58,16 +58,22 @@ def persist_predictions(db, user_id: int, model_id: int, results: List[dict]) ->
                 AnomalyEvent(
                     prediction_id=pred.id,
                     user_id=user_id,
-                    severity=_severity_from(r["score"]),
+                    severity=_severity_from(r["score"], epsilon),
                 )
             )
     db.commit()
     return anomaly_count
 
 
-def _severity_from(score: float) -> str:
-    if score > 1.0:
+def _severity_from(score: float, epsilon: float) -> str:
+    """Severity relative to the personalized threshold (score/epsilon ratio),
+    per Implementation_Plan.md sec 5.3 -- not an absolute score cutoff, since
+    each model's score scale differs (IF log-density vs LSTM MAE)."""
+    if epsilon <= 0:
+        return "warning"
+    ratio = score / epsilon
+    if ratio > 2.0:
         return "critical"
-    if score > 0.5:
+    if ratio > 1.3:
         return "warning"
     return "info"
