@@ -143,6 +143,81 @@ export type PredictResult = {
   }[];
 };
 
+export type SplitOptions = {
+  n_rows: number;
+  candidate_id_columns: { column: string; n_unique: number; example_values: string[] }[];
+  candidate_time_columns: { column: string; sample_range: [string, string] }[];
+};
+
+export type AnalyzeResult = {
+  temp_id: string;
+  n_rows: number;
+  n_features: number;
+  columns: string[];
+  split_options: SplitOptions;
+  profile: Profile;
+};
+
+export type SplitPeriod = "hourly" | "daily" | "weekly" | "monthly";
+
+export type SplitConfig =
+  | { mode: "none" }
+  | { mode: "by_column"; column: string }
+  | { mode: "by_time"; column: string; period: SplitPeriod };
+
+export type CommitBody = {
+  temp_id: string;
+  target: "new" | "existing";
+  subject_name?: string;
+  subject_description?: string;
+  subject_id?: number;
+  split: SplitConfig;
+};
+
+export type CommitResult = {
+  subject_ids: number[];
+  dataset_ids: number[];
+  training_queued: boolean;
+};
+
+export type Subject = {
+  id: number;
+  name: string;
+  description: string | null;
+  source_hint: string | null;
+  is_default: boolean;
+  created_at: string;
+  n_datasets: number;
+  n_models: number;
+  n_anomalies: number;
+  active_epsilon: number | null;
+  active_algorithm: string | null;
+};
+
+export type SubjectDataset = {
+  id: number;
+  name: string;
+  n_rows: number | null;
+  n_features: number | null;
+  uploaded_at: string;
+};
+
+export type SubjectModel = {
+  id: number;
+  algorithm: string;
+  selection_reason: string | null;
+  selection_mode: "auto" | "manual";
+  status: string;
+  is_active: boolean;
+  trained_at: string | null;
+  threshold: Threshold | null;
+};
+
+export type SubjectDetail = Subject & {
+  datasets: SubjectDataset[];
+  models: SubjectModel[];
+};
+
 export const auth = {
   register: (email: string, password: string) =>
     api.post("/auth/register", { email, password }),
@@ -167,6 +242,35 @@ export const datasets = {
     }>("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
   },
   list: () => api.get<Dataset[]>("/upload"),
+  analyze: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<AnalyzeResult>("/upload/analyze", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  commit: (body: CommitBody) => api.post<CommitResult>("/upload/commit", body),
+};
+
+export const subjects = {
+  list: (opts?: RequestOpts) => api.get<Subject[]>("/subjects", { signal: opts?.signal }),
+  create: (name: string, description?: string) =>
+    api.post<Subject>("/subjects", { name, description }),
+  detail: (id: number, opts?: RequestOpts) =>
+    api.get<SubjectDetail>(`/subjects/${id}`, { signal: opts?.signal }),
+  update: (id: number, data: { name?: string; description?: string }) =>
+    api.patch<Subject>(`/subjects/${id}`, data),
+  delete: (id: number) => api.delete(`/subjects/${id}`),
+  retrain: (id: number) =>
+    api.post<{ model_id: number; old_epsilon: number | null; new_epsilon: number; delta_pct: number | null }>(
+      `/subjects/${id}/retrain`,
+    ),
+  trainAlternative: (id: number, algorithm: "IF" | "LSTM") =>
+    api.post<{ model_id: number; algorithm: string; epsilon: number }>(`/subjects/${id}/train-alternative`, {
+      algorithm,
+    }),
+  activateModel: (subjectId: number, modelId: number) =>
+    api.post<SubjectModel>(`/subjects/${subjectId}/models/${modelId}/activate`),
 };
 
 export const models = {
