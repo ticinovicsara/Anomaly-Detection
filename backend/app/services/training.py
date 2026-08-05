@@ -244,6 +244,20 @@ def run_retrain_job(subject_id: int, user_id: int) -> dict:
         return _retrain_impl(subject_id, user_id)
 
 
+def run_retrain_job_background(subject_id: int, user_id: int) -> None:
+    """Fire-and-forget variant for FastAPI BackgroundTasks (e.g. a bulk
+    upload/commit that just created several Subjects at once, each needing
+    its first training run) -- same lock and impl as run_retrain_job, but
+    never raises. Failure is already recorded on the Model row by
+    _retrain_impl; there's no request left to turn a raised error into an
+    HTTP response by the time a background task runs."""
+    try:
+        with _TRAIN_LOCK:
+            _retrain_impl(subject_id, user_id)
+    except Exception:
+        logger.exception("Background retrain failed for subject %s", subject_id)
+
+
 def _train_alternative_impl(subject_id: int, user_id: int, algorithm: str) -> dict:
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
     db = SessionLocal()
