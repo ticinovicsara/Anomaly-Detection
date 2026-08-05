@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import anomalies, auth, predict, settings as settings_router, train, upload
+from app.api import anomalies, auth, predict, settings as settings_router, subjects, train, upload
 from app.core.config import DEFAULT_JWT_SECRET, settings
 from app.core.limiter import limiter
 
@@ -40,6 +40,7 @@ app.include_router(train.router)
 app.include_router(predict.router)
 app.include_router(anomalies.router)
 app.include_router(settings_router.router)
+app.include_router(subjects.router)
 
 
 @app.get("/health", tags=["meta"])

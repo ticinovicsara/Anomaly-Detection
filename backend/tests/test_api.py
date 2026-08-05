@@ -1,49 +1,12 @@
-"""End-to-end API tests using SQLite in-memory DB (fast, no docker needed)."""
-import io
-import os
+"""End-to-end API tests using SQLite in-memory DB (fast, no docker needed).
 
-os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+Shared engine/dependency-override/client fixtures live in conftest.py.
+"""
+import io
 
 import numpy as np
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.limiter import limiter
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import app
-
-
-engine = create_engine("sqlite:///./test.db", connect_args={"check_same_thread": False})
-TestingSession = sessionmaker(bind=engine)
-
-
-def override_get_db():
-    db = TestingSession()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
-@pytest.fixture(autouse=True)
-def _reset_db():
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    limiter.reset()
-    yield
-    Base.metadata.drop_all(engine)
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
 
 
 @pytest.fixture
