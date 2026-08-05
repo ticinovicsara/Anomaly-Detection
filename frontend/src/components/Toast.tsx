@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from "lucide-react";
-import { cn } from "../lib/cn";
 
 type Tone = "info" | "success" | "warning" | "error";
 type Toast = { id: number; tone: Tone; title: string; message?: string };
@@ -29,9 +29,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         role="status"
         aria-live="polite"
       >
-        {toasts.map((t) => (
-          <ToastCard key={t.id} toast={t} onClose={() => dismiss(t.id)} />
-        ))}
+        <AnimatePresence>
+          {toasts.map((t) => (
+            <ToastCard key={t.id} toast={t} onClose={() => dismiss(t.id)} />
+          ))}
+        </AnimatePresence>
       </div>
     </ToastCtx.Provider>
   );
@@ -51,11 +53,15 @@ const icons: Record<Tone, ReactNode> = {
 };
 
 function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+  const reduceMotion = useReducedMotion();
   return (
-    <div
-      className={cn(
-        "pointer-events-auto flex items-start gap-3 rounded-xl border border-border bg-surface p-4 shadow-soft animate-slide-in"
-      )}
+    <motion.div
+      layout
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.95 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 400, damping: 32 }}
+      className="pointer-events-auto flex items-start gap-3 rounded-xl border border-border bg-surface p-4 shadow-soft"
     >
       {icons[toast.tone]}
       <div className="flex-1 min-w-0">
@@ -69,6 +75,6 @@ function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       >
         <X className="h-4 w-4" />
       </button>
-    </div>
+    </motion.div>
   );
 }
