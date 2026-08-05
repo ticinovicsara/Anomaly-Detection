@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import { NavLink, Link } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
   LayoutDashboard,
@@ -77,12 +78,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+            onClick={() => setMobileOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
