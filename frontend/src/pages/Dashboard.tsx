@@ -21,6 +21,7 @@ import { Button } from "../components/Button";
 import { Card, StatCard } from "../components/Card";
 import { Badge, severityTone, statusTone } from "../components/Badge";
 import { DashboardSkeleton } from "../components/Skeleton";
+import { StaggerGroup, StaggerItem } from "../components/Stagger";
 import { anomalies as anomaliesApi, isCancelled, models as modelsApi, Anomaly, ModelInfo } from "../api/client";
 
 export default function Dashboard() {
@@ -77,26 +78,34 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Anomalies today"
-          value={inLast(1)}
-          tone={inLast(1) > 0 ? "warning" : "default"}
-          icon={<AlertTriangle className="h-5 w-5" />}
-        />
-        <StatCard label="Past 7 days" value={inLast(7)} icon={<Activity className="h-5 w-5" />} />
-        <StatCard
-          label="Trained models"
-          value={readyModels.length}
-          hint={`${models.length - readyModels.length} training / failed`}
-          icon={<Brain className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Datasets"
-          value={new Set(models.map((m) => m.dataset_id)).size}
-          icon={<Database className="h-5 w-5" />}
-        />
-      </div>
+      <StaggerGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StaggerItem>
+          <StatCard
+            label="Anomalies today"
+            value={inLast(1)}
+            tone={inLast(1) > 0 ? "warning" : "default"}
+            icon={<AlertTriangle className="h-5 w-5" />}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard label="Past 7 days" value={inLast(7)} icon={<Activity className="h-5 w-5" />} />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Trained models"
+            value={readyModels.length}
+            hint={`${models.length - readyModels.length} training / failed`}
+            icon={<Brain className="h-5 w-5" />}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Datasets"
+            value={new Set(models.map((m) => m.dataset_id)).size}
+            icon={<Database className="h-5 w-5" />}
+          />
+        </StaggerItem>
+      </StaggerGroup>
 
       {/* Chart + Recent anomalies */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

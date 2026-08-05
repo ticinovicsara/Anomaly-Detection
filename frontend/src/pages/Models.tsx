@@ -6,6 +6,7 @@ import { Card } from "../components/Card";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { FullPageSpinner } from "../components/Spinner";
+import { StaggerGroup, StaggerItem } from "../components/Stagger";
 import { useToast } from "../components/Toast";
 import { errorMessage, isCancelled, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
 
@@ -104,63 +105,65 @@ export default function Models() {
           />
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((m) => (
-            <Card key={m.id} hoverable>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-accent/10 p-2 text-accent">
-                    <Brain className="h-5 w-5" />
+            <StaggerItem key={m.id}>
+              <Card hoverable>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-accent/10 p-2 text-accent">
+                      <Brain className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Model #{m.id}</p>
+                      <p className="text-xs text-muted">Dataset #{m.dataset_id}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold">Model #{m.id}</p>
-                    <p className="text-xs text-muted">Dataset #{m.dataset_id}</p>
-                  </div>
+                  <Badge tone={statusTone(m.status)}>{m.status}</Badge>
                 </div>
-                <Badge tone={statusTone(m.status)}>{m.status}</Badge>
-              </div>
 
-              <div className="mt-4 space-y-2">
-                <Row label="Algorithm" value={m.algorithm} />
-                <Row
-                  label="Threshold ε"
-                  value={m.threshold ? m.threshold.epsilon.toFixed(4) : "-"}
-                />
-                <Row
-                  label="z-multiplier"
-                  value={m.threshold ? m.threshold.z_multiplier.toFixed(1) : "-"}
-                />
-              </div>
+                <div className="mt-4 space-y-2">
+                  <Row label="Algorithm" value={m.algorithm} />
+                  <Row
+                    label="Threshold ε"
+                    value={m.threshold ? m.threshold.epsilon.toFixed(4) : "-"}
+                  />
+                  <Row
+                    label="z-multiplier"
+                    value={m.threshold ? m.threshold.z_multiplier.toFixed(1) : "-"}
+                  />
+                </div>
 
-              {m.selection_reason && (
-                <p className="mt-3 rounded-lg bg-surface-2/60 p-2.5 text-[11px] text-muted">
-                  {m.selection_reason}
-                </p>
-              )}
+                {m.selection_reason && (
+                  <p className="mt-3 rounded-lg bg-surface-2/60 p-2.5 text-[11px] text-muted">
+                    {m.selection_reason}
+                  </p>
+                )}
 
-              {m.status === "failed" && m.metrics?.error && (
-                <p className="mt-3 rounded-lg bg-danger/10 p-2.5 text-[11px] text-danger">
-                  {m.metrics.error}
-                </p>
-              )}
+                {m.status === "failed" && m.metrics?.error && (
+                  <p className="mt-3 rounded-lg bg-danger/10 p-2.5 text-[11px] text-danger">
+                    {m.metrics.error}
+                  </p>
+                )}
 
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mt-4 w-full"
-                disabled={m.status !== "ready"}
-                loading={predicting === m.id}
-                icon={<PlayCircle className="h-4 w-4" />}
-                onClick={() => {
-                  setTargetModel(m.id);
-                  fileInputRef.current?.click();
-                }}
-              >
-                Predict on new CSV
-              </Button>
-            </Card>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-4 w-full"
+                  disabled={m.status !== "ready"}
+                  loading={predicting === m.id}
+                  icon={<PlayCircle className="h-4 w-4" />}
+                  onClick={() => {
+                    setTargetModel(m.id);
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Predict on new CSV
+                </Button>
+              </Card>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerGroup>
       )}
 
       <input
