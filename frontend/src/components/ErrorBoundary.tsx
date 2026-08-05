@@ -5,6 +5,10 @@ import { Card } from "./Card";
 
 interface Props {
   children: ReactNode;
+  /** When this changes (e.g. route pathname), a caught error is cleared
+   * without unmounting the boundary itself -- lets a parent AnimatePresence
+   * keep tracking this subtree's mount identity across navigation. */
+  resetKey?: string;
 }
 
 interface State {
@@ -20,6 +24,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error("Unhandled error in page:", error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.error && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ error: null });
+    }
   }
 
   render() {

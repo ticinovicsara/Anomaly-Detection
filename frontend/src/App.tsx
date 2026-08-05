@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useOutlet } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FullPageSpinner } from "./components/Spinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import AppShell from "./layout/AppShell";
@@ -16,17 +17,30 @@ const Models = lazy(() => import("./pages/Models"));
 function ProtectedLayout() {
   const { isAuthed, loading } = useAuth();
   const location = useLocation();
+  // Captured per-render so AnimatePresence can keep rendering the outgoing
+  // page's actual content while it plays its exit animation -- <Outlet/>
+  // itself always reflects the *new* route the instant it changes.
+  const outlet = useOutlet();
+  const reduceMotion = useReducedMotion();
   if (loading) return <FullPageSpinner />;
   if (!isAuthed) return <Navigate to="/login" replace />;
   return (
     <AppShell>
-      {/* Keyed on pathname so only the page content remounts (and fades in /
-          resets its error boundary) on navigation -- the sidebar and header
-          stay mounted instead of flickering on every click. */}
-      <ErrorBoundary key={location.pathname}>
-        <div className="animate-fade-in">
-          <Outlet />
-        </div>
+      {/* resetKey (not a React key) clears a caught error on navigation
+          without unmounting the boundary -- a hard remount here would
+          break AnimatePresence's ability to track exit animations below. */}
+      <ErrorBoundary resetKey={location.pathname}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+            transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.23, 1, 0.32, 1] }}
+          >
+            {outlet}
+          </motion.div>
+        </AnimatePresence>
       </ErrorBoundary>
     </AppShell>
   );
