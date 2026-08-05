@@ -1,5 +1,5 @@
 # Python
-__pycache__/
+*.__pycache__/
 *.pyc
 *.pyo
 .venv/
@@ -42,6 +42,3 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
-
-# Old project remnants (being deleted)
-Anomaly-Detection/
