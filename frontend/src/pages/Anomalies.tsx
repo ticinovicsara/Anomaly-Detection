@@ -59,7 +59,7 @@ export default function Anomalies() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Anomalies</h1>
         <p className="mt-1 text-sm text-muted">
-          Review detected anomalies and label them — your feedback improves calibration.
+          Review detected anomalies and label them. Your feedback improves calibration.
         </p>
       </div>
 

@@ -52,7 +52,7 @@ export default function Upload() {
       toast({
         tone: "info",
         title: "Training started",
-        message: `${r.data.algorithm_chosen} — ${r.data.reason}`,
+        message: `${r.data.algorithm_chosen}: ${r.data.reason}`,
       });
       setTimeout(() => nav("/models"), 800);
     } catch (err) {
@@ -74,7 +74,7 @@ export default function Upload() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Upload data</h1>
         <p className="mt-1 text-sm text-muted">
-          Drop a CSV — we&apos;ll analyze it and pick the best model automatically.
+          Drop a CSV, and we&apos;ll analyze it and pick the best model automatically.
         </p>
       </div>
 
@@ -98,7 +98,7 @@ export default function Upload() {
             <p className="text-sm font-medium text-text">
               {uploading ? "Uploading…" : "Drop your CSV here"}
             </p>
-            <p className="mt-1 text-xs text-muted">or click to browse — up to 50 MB</p>
+            <p className="mt-1 text-xs text-muted">or click to browse, up to 50 MB</p>
           </div>
           <input
             type="file"
@@ -161,7 +161,7 @@ export default function Upload() {
                   <div>
                     <p className="text-sm font-medium text-text">Model recommendation</p>
                     <p className="text-xs text-muted">
-                      Based on the data profile — you don&apos;t have to choose.
+                      Based on the data profile. You don&apos;t have to choose.
                     </p>
                   </div>
                 </div>
@@ -180,7 +180,7 @@ export default function Upload() {
                 ) : (
                   <div className="mt-5">
                     <p className="text-sm text-muted">
-                      Click <b>Start training</b> — the system will profile your data, select the best model
+                      Click <b>Start training</b> and the system will profile your data, select the best model
                       (Isolation Forest or LSTM), train it, and calibrate a personalized threshold.
                     </p>
                     <div className="mt-4 flex gap-2">
@@ -216,6 +216,6 @@ function ProfileRow({ label, value, hint }: { label: string; value: string; hint
 }
 
 function fmt(n: number | null | undefined, digits = 3): string {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return "-";
   return n.toFixed(digits);
 }

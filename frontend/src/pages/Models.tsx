@@ -84,7 +84,7 @@ export default function Models() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Models</h1>
         <p className="mt-1 text-sm text-muted">
-          Trained models — click <b>Predict</b> to run one on new data.
+          Trained models. Click <b>Predict</b> to run one on new data.
         </p>
       </div>
 
@@ -124,11 +124,11 @@ export default function Models() {
                 <Row label="Algorithm" value={m.algorithm} />
                 <Row
                   label="Threshold ε"
-                  value={m.threshold ? m.threshold.epsilon.toFixed(4) : "—"}
+                  value={m.threshold ? m.threshold.epsilon.toFixed(4) : "-"}
                 />
                 <Row
                   label="z-multiplier"
-                  value={m.threshold ? m.threshold.z_multiplier.toFixed(1) : "—"}
+                  value={m.threshold ? m.threshold.z_multiplier.toFixed(1) : "-"}
                 />
               </div>
 

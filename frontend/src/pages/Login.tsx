@@ -48,7 +48,7 @@ export default function Login() {
 
         <Card className="p-8">
           <h2 className="text-lg font-semibold text-text">Sign in</h2>
-          <p className="mt-1 text-sm text-muted">Welcome back — enter your details to continue.</p>
+          <p className="mt-1 text-sm text-muted">Welcome back. Enter your details to continue.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <Input

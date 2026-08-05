@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { cn } from "../lib/cn";
 
@@ -37,12 +38,19 @@ export function Button({
   disabled,
   ...rest
 }: Props) {
+  const reduceMotion = useReducedMotion();
+  const isDisabled = disabled || loading;
   return (
-    <button
-      {...rest}
-      disabled={disabled || loading}
+    <motion.button
+      // framer-motion's event typings conflict with a few native handlers
+      // (onDrag*, onAnimationStart/End) that this app never passes through
+      // Button -- safe to widen at the spread boundary.
+      {...(rest as Omit<typeof rest, "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart">)}
+      disabled={isDisabled}
+      whileTap={isDisabled || reduceMotion ? undefined : { scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium transition-[transform,background-color,box-shadow,border-color] duration-150 ease-out-strong disabled:cursor-not-allowed disabled:opacity-70 active:scale-[0.98]",
+        "inline-flex items-center justify-center gap-2 font-medium transition-[background-color,box-shadow,border-color] duration-150 ease-out-strong disabled:cursor-not-allowed disabled:opacity-70",
         variants[variant],
         sizes[size],
         className
@@ -50,6 +58,6 @@ export function Button({
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {children}
-    </button>
+    </motion.button>
   );
 }

@@ -49,7 +49,7 @@ export default function Register() {
 
         <Card className="p-8">
           <h2 className="text-lg font-semibold text-text">Create account</h2>
-          <p className="mt-1 text-sm text-muted">Get started in seconds — no credit card needed.</p>
+          <p className="mt-1 text-sm text-muted">Get started in seconds, no credit card needed.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <Input

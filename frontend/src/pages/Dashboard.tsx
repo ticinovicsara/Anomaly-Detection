@@ -160,7 +160,7 @@ export default function Dashboard() {
         <Card>
           <h3 className="mb-4 text-sm font-semibold text-text">Recent anomalies</h3>
           {recent.length === 0 ? (
-            <p className="text-sm text-muted">Nothing yet — upload data and train a model to get started.</p>
+            <p className="text-sm text-muted">Nothing yet. Upload data and train a model to get started.</p>
           ) : (
             <ul className="space-y-3 max-h-64 overflow-y-auto pr-1">
               {recent.slice(0, 8).map((a) => (
@@ -212,10 +212,10 @@ export default function Dashboard() {
                       <Badge tone={statusTone(m.status)}>{m.status}</Badge>
                     </td>
                     <td className="px-6 py-3 text-muted text-xs max-w-md truncate">
-                      {m.selection_reason ?? "—"}
+                      {m.selection_reason ?? "-"}
                     </td>
                     <td className="px-6 py-3 font-mono text-muted">
-                      {m.threshold ? m.threshold.epsilon.toFixed(4) : "—"}
+                      {m.threshold ? m.threshold.epsilon.toFixed(4) : "-"}
                     </td>
                   </tr>
                 ))}
