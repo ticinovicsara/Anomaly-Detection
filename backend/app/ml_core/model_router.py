@@ -1,8 +1,4 @@
-"""Rule-based router: pick the model based on data profile.
-
-Returns (algorithm, human_readable_reason). The reason is stored in
-`models.selection_reason` so the user can see WHY a model was chosen.
-"""
+"""Rule-based router. Returns (algorithm, human_readable_reason)."""
 from typing import Dict, Tuple
 
 
