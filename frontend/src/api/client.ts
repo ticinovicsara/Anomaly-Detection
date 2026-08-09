@@ -220,6 +220,31 @@ export type SubjectDetail = Subject & {
   models: SubjectModel[];
 };
 
+export type ExperimentStatistics = {
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+  range_ratio: number | null;
+};
+
+export type CrossApplication = {
+  global_epsilon: number;
+  fp_rate_at_global: Record<string, number | null>;
+  miss_rate_at_global: Record<string, number | null>;
+};
+
+export type ExperimentResult = {
+  subject_ids: number[];
+  epsilons: Record<string, number>;
+  statistics: ExperimentStatistics;
+  cross_application: CrossApplication;
+};
+
+export type PresetDemoResult = ExperimentResult & {
+  created_subject_ids: number[];
+};
+
 export const auth = {
   register: (email: string, password: string) =>
     api.post("/auth/register", { email, password }),
@@ -273,6 +298,12 @@ export const subjects = {
     }),
   activateModel: (subjectId: number, modelId: number) =>
     api.post<SubjectModel>(`/subjects/${subjectId}/models/${modelId}/activate`),
+};
+
+export const experiments = {
+  run: (subjectIds: number[]) =>
+    api.post<ExperimentResult>("/experiments/personalization", { subject_ids: subjectIds }),
+  presetDemo: () => api.post<PresetDemoResult>("/experiments/preset-demo"),
 };
 
 export const models = {
