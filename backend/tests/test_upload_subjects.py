@@ -84,6 +84,36 @@ def test_commit_no_split_existing_subject(client, auth_headers):
     assert r.json()["n_datasets"] == 1
 
 
+def test_commit_with_algorithm_override_skips_router(client, auth_headers):
+    """Advanced-mode path: the caller picks the algorithm at commit time
+    instead of letting the router decide. Uses n=700 rows so the LSTM
+    training run (window=50, needs val >= ~70 rows) actually succeeds."""
+    r = client.post(
+        "/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _csv_bytes(n=700), "text/csv")}
+    )
+    temp_id = r.json()["temp_id"]
+
+    r = client.post(
+        "/upload/commit",
+        headers=auth_headers,
+        json={
+            "temp_id": temp_id,
+            "target": "new",
+            "subject_name": "Forced LSTM subject",
+            "split": {"mode": "none"},
+            "algorithm": "LSTM",
+        },
+    )
+    assert r.status_code == 201, r.text
+    subject_id = r.json()["subject_ids"][0]
+
+    r = client.get(f"/subjects/{subject_id}", headers=auth_headers)
+    models = r.json()["models"]
+    assert len(models) == 1
+    assert models[0]["algorithm"] == "LSTM"
+    assert models[0]["selection_mode"] == "manual"
+
+
 def test_commit_split_by_column_creates_multiple_subjects(client, auth_headers):
     r = client.post(
         "/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _csv_bytes(with_id=True), "text/csv")}

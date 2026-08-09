@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import current_user
-from app.db.models import AnomalyEvent, Prediction, User
+from app.db.models import AnomalyEvent, Model, Prediction, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
@@ -32,6 +32,7 @@ class LabelIn(BaseModel):
 @router.get("", response_model=list[AnomalyOut])
 def list_anomalies(
     model_id: Optional[int] = Query(None),
+    subject_id: Optional[int] = Query(None),
     label: Optional[str] = Query(None),
     limit: int = Query(100, le=500),
     user: User = Depends(current_user),
@@ -44,8 +45,12 @@ def list_anomalies(
     )
     if label:
         q = q.filter(AnomalyEvent.label == label)
-    if model_id is not None:
-        q = q.join(Prediction).filter(Prediction.model_id == model_id)
+    if model_id is not None or subject_id is not None:
+        q = q.join(Prediction, AnomalyEvent.prediction_id == Prediction.id)
+        if model_id is not None:
+            q = q.filter(Prediction.model_id == model_id)
+        if subject_id is not None:
+            q = q.join(Model, Prediction.model_id == Model.id).filter(Model.subject_id == subject_id)
     q = q.order_by(AnomalyEvent.created_at.desc()).limit(limit)
 
     return [

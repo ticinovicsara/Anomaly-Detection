@@ -50,6 +50,8 @@ def list_models(user: User = Depends(current_user), db: Session = Depends(get_db
             "algorithm": m.algorithm,
             "status": m.status,
             "selection_reason": m.selection_reason,
+            "selection_mode": m.selection_mode,
+            "is_active": m.is_active,
             "trained_at": m.trained_at.isoformat() if m.trained_at else None,
             "drift_status": m.drift_status,
             "metrics": m.metrics_json,

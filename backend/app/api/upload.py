@@ -197,6 +197,10 @@ class CommitIn(BaseModel):
     subject_description: Optional[str] = Field(default=None, max_length=2000)
     subject_id: Optional[int] = None
     split: SplitConfig
+    # Advanced-mode only: overrides the router for the first training run
+    # on each Subject this commit creates. Left null for the default
+    # (router-decides) path.
+    algorithm: Optional[str] = Field(default=None, pattern="^(IF|LSTM)$")
 
 
 @router.post("/commit", status_code=status.HTTP_201_CREATED)
@@ -309,7 +313,7 @@ def commit_upload(
 
         subject_ids.append(subject.id)
         dataset_ids.append(dataset.id)
-        background_tasks.add_task(run_retrain_job_background, subject.id, user.id)
+        background_tasks.add_task(run_retrain_job_background, subject.id, user.id, body.algorithm)
 
     os.remove(tmp_path)
     os.remove(meta_path)

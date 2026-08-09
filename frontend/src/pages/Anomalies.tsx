@@ -6,7 +6,7 @@ import { Badge, severityTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { TableRowsSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
-import { anomalies as api, isCancelled, Anomaly } from "../api/client";
+import { anomalies as api, isCancelled, subjects as subjectsApi, Anomaly, Subject } from "../api/client";
 
 const labels = [
   { value: "", label: "All" },
@@ -18,15 +18,31 @@ const labels = [
 
 export default function Anomalies() {
   const [items, setItems] = useState<Anomaly[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [labelFilter, setLabelFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState<number | null>(null);
   const toast = useToast();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    subjectsApi
+      .list({ signal: controller.signal })
+      .then((r) => setSubjects(r.data))
+      .catch(() => {
+        // Non-critical: the subject filter row just won't have options.
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     api
-      .list({ label: labelFilter || undefined, limit: 200 }, { signal: controller.signal })
+      .list(
+        { label: labelFilter || undefined, subject_id: subjectFilter ?? undefined, limit: 200 },
+        { signal: controller.signal },
+      )
       .then((r) => setItems(r.data))
       .catch((err) => {
         if (!isCancelled(err)) throw err;
@@ -35,7 +51,9 @@ export default function Anomalies() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [labelFilter]);
+  }, [labelFilter, subjectFilter]);
+
+  const subjectById = new Map(subjects.map((s) => [s.id, s]));
 
   const setLabel = async (id: number, label: string) => {
     const previous = items;
@@ -91,6 +109,34 @@ export default function Anomalies() {
           </button>
         ))}
       </div>
+      {subjects.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="w-4" />
+          <button
+            onClick={() => setSubjectFilter(null)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              subjectFilter === null
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-muted hover:text-text"
+            }`}
+          >
+            All subjects
+          </button>
+          {subjects.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSubjectFilter(s.id)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                subjectFilter === s.id
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-muted hover:text-text"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -116,6 +162,7 @@ export default function Anomalies() {
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                   <th className="px-6 py-3 font-medium">When</th>
+                  <th className="px-6 py-3 font-medium">Subject</th>
                   <th className="px-6 py-3 font-medium">Model</th>
                   <th className="px-6 py-3 font-medium">Window</th>
                   <th className="px-6 py-3 font-medium">Score</th>
@@ -128,6 +175,13 @@ export default function Anomalies() {
                 {items.map((a) => (
                   <tr key={a.id} className="border-b border-border/50 last:border-0 hover:bg-surface-2/30">
                     <td className="px-6 py-3 text-xs text-muted">{new Date(a.created_at).toLocaleString()}</td>
+                    <td className="px-6 py-3">
+                      {subjectById.get(a.subject_id) ? (
+                        <Badge>{subjectById.get(a.subject_id)!.name}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted">-</span>
+                      )}
+                    </td>
                     <td className="px-6 py-3 font-mono text-xs text-muted">#{a.model_id}</td>
                     <td className="px-6 py-3 font-mono text-xs">{a.window_idx}</td>
                     <td className="px-6 py-3 font-mono text-xs">{a.score.toFixed(3)}</td>

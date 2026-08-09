@@ -42,6 +42,10 @@ class SubjectOut(BaseModel):
     n_anomalies: int
     active_epsilon: Optional[float]
     active_algorithm: Optional[str]
+    active_model_id: Optional[int]
+    active_mu: Optional[float]
+    active_sigma: Optional[float]
+    active_z_multiplier: Optional[float]
 
 
 class DatasetOut(BaseModel):
@@ -133,6 +137,10 @@ def _subject_out(db: Session, subject: Subject) -> SubjectOut:
         n_anomalies=_anomaly_count(db, subject.id),
         active_epsilon=active.threshold.epsilon if active and active.threshold else None,
         active_algorithm=active.algorithm if active else None,
+        active_model_id=active.id if active else None,
+        active_mu=active.threshold.mu if active and active.threshold else None,
+        active_sigma=active.threshold.sigma if active and active.threshold else None,
+        active_z_multiplier=active.threshold.z_multiplier if active and active.threshold else None,
     )
 
 

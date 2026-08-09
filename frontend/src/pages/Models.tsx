@@ -1,22 +1,34 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Brain, PlayCircle, Upload as UploadIcon } from "lucide-react";
+import { Brain, ChevronDown, PlayCircle, Upload as UploadIcon } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { FullPageSpinner } from "../components/Spinner";
-import { StaggerGroup, StaggerItem } from "../components/Stagger";
 import { useToast } from "../components/Toast";
-import { errorMessage, isCancelled, models as modelsApi, ModelInfo, PredictResult } from "../api/client";
+import { useAdvancedMode } from "../hooks/useAdvancedMode";
+import {
+  errorMessage,
+  isCancelled,
+  models as modelsApi,
+  subjects as subjectsApi,
+  ModelInfo,
+  PredictResult,
+  Subject,
+} from "../api/client";
 
 export default function Models() {
+  const { enabled: advancedMode } = useAdvancedMode();
+
   const [items, setItems] = useState<ModelInfo[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState<number | null>(null);
   const [result, setResult] = useState<PredictResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [targetModel, setTargetModel] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const toast = useToast();
 
   useEffect(() => {
@@ -40,11 +52,11 @@ export default function Models() {
         });
     };
 
-    modelsApi
-      .list({ signal: controller.signal })
-      .then((r) => {
-        setItems(r.data);
-        if (isPending(r.data)) intervalId = window.setInterval(poll, 3000);
+    Promise.all([modelsApi.list({ signal: controller.signal }), subjectsApi.list({ signal: controller.signal })])
+      .then(([m, s]) => {
+        setItems(m.data);
+        setSubjects(s.data);
+        if (isPending(m.data)) intervalId = window.setInterval(poll, 3000);
       })
       .catch((err) => {
         if (!isCancelled(err)) throw err;
@@ -78,6 +90,31 @@ export default function Models() {
     }
   };
 
+  const groups = useMemo(() => {
+    const bySubject = new Map<number, ModelInfo[]>();
+    for (const m of items) {
+      const arr = bySubject.get(m.subject_id) ?? [];
+      arr.push(m);
+      bySubject.set(m.subject_id, arr);
+    }
+    return subjects
+      .map((s) => {
+        const all = bySubject.get(s.id) ?? [];
+        const visible = advancedMode ? all : all.filter((m) => m.is_active).length > 0 ? all.filter((m) => m.is_active) : all.slice(0, 1);
+        return { subject: s, models: visible };
+      })
+      .filter((g) => g.models.length > 0);
+  }, [items, subjects, advancedMode]);
+
+  const toggleCollapsed = (subjectId: number) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(subjectId)) next.delete(subjectId);
+      else next.add(subjectId);
+      return next;
+    });
+  };
+
   if (loading) return <FullPageSpinner />;
 
   return (
@@ -85,11 +122,11 @@ export default function Models() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Models</h1>
         <p className="mt-1 text-sm text-muted">
-          Trained models. Click <b>Predict</b> to run one on new data.
+          Grouped by subject. Click <b>Predict</b> to run one on new data.
         </p>
       </div>
 
-      {items.length === 0 ? (
+      {groups.length === 0 ? (
         <Card>
           <EmptyState
             icon={Brain}
@@ -105,65 +142,76 @@ export default function Models() {
           />
         </Card>
       ) : (
-        <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((m) => (
-            <StaggerItem key={m.id}>
-              <Card hoverable>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl bg-accent/10 p-2 text-accent">
-                      <Brain className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Model #{m.id}</p>
-                      <p className="text-xs text-muted">Dataset #{m.dataset_id}</p>
-                    </div>
-                  </div>
-                  <Badge tone={statusTone(m.status)}>{m.status}</Badge>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  <Row label="Algorithm" value={m.algorithm} />
-                  <Row
-                    label="Threshold ε"
-                    value={m.threshold ? m.threshold.epsilon.toFixed(4) : "-"}
-                  />
-                  <Row
-                    label="z-multiplier"
-                    value={m.threshold ? m.threshold.z_multiplier.toFixed(1) : "-"}
-                  />
-                </div>
-
-                {m.selection_reason && (
-                  <p className="mt-3 rounded-lg bg-surface-2/60 p-2.5 text-[11px] text-muted">
-                    {m.selection_reason}
-                  </p>
-                )}
-
-                {m.status === "failed" && m.metrics?.error && (
-                  <p className="mt-3 rounded-lg bg-danger/10 p-2.5 text-[11px] text-danger">
-                    {m.metrics.error}
-                  </p>
-                )}
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-4 w-full"
-                  disabled={m.status !== "ready"}
-                  loading={predicting === m.id}
-                  icon={<PlayCircle className="h-4 w-4" />}
-                  onClick={() => {
-                    setTargetModel(m.id);
-                    fileInputRef.current?.click();
-                  }}
+        <div className="space-y-4">
+          {groups.map(({ subject, models }) => {
+            const isCollapsed = collapsed.has(subject.id);
+            return (
+              <Card key={subject.id} className="p-0 overflow-hidden">
+                <button
+                  onClick={() => toggleCollapsed(subject.id)}
+                  className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left hover:bg-surface-2/40"
                 >
-                  Predict on new CSV
-                </Button>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}
+                    />
+                    <Link
+                      to={`/subjects/${subject.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="truncate text-sm font-semibold text-text hover:text-accent"
+                    >
+                      {subject.name}
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted shrink-0">
+                    <span>{models.length} model{models.length === 1 ? "" : "s"}</span>
+                    {subject.active_epsilon !== null && (
+                      <span className="font-mono">ε = {subject.active_epsilon.toFixed(4)}</span>
+                    )}
+                  </div>
+                </button>
+
+                <div
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <ul className="divide-y divide-border border-t border-border">
+                      {models.map((m) => (
+                        <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="text-sm text-text">Model #{m.id}</span>
+                            <Badge tone="accent">{m.algorithm}</Badge>
+                            <Badge tone={statusTone(m.status)}>{m.status}</Badge>
+                            {advancedMode && (
+                              <span className={`h-1.5 w-1.5 rounded-full ${m.is_active ? "bg-success" : "bg-border"}`} title={m.is_active ? "Active" : "Not active"} />
+                            )}
+                            {advancedMode && m.selection_mode === "manual" && <Badge>manual</Badge>}
+                            {m.threshold && <span className="font-mono text-xs text-muted">ε={m.threshold.epsilon.toFixed(4)}</span>}
+                          </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={m.status !== "ready"}
+                            loading={predicting === m.id}
+                            icon={<PlayCircle className="h-3.5 w-3.5" />}
+                            onClick={() => {
+                              setTargetModel(m.id);
+                              fileInputRef.current?.click();
+                            }}
+                          >
+                            Predict
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </Card>
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
+            );
+          })}
+        </div>
       )}
 
       <input
@@ -195,15 +243,6 @@ export default function Models() {
           </div>
         </Card>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-muted">{label}</span>
-      <span className="font-mono text-text">{value}</span>
     </div>
   );
 }

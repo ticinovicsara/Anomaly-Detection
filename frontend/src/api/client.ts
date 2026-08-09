@@ -110,6 +110,8 @@ export type ModelInfo = {
   algorithm: "IF" | "LSTM";
   status: "pending" | "training" | "ready" | "failed";
   selection_reason: string | null;
+  selection_mode: "auto" | "manual";
+  is_active: boolean;
   trained_at: string | null;
   drift_status: string;
   metrics: ModelMetrics;
@@ -174,6 +176,7 @@ export type CommitBody = {
   subject_description?: string;
   subject_id?: number;
   split: SplitConfig;
+  algorithm?: "IF" | "LSTM";
 };
 
 export type CommitResult = {
@@ -194,6 +197,10 @@ export type Subject = {
   n_anomalies: number;
   active_epsilon: number | null;
   active_algorithm: string | null;
+  active_model_id: number | null;
+  active_mu: number | null;
+  active_sigma: number | null;
+  active_z_multiplier: number | null;
 };
 
 export type SubjectDataset = {
@@ -324,7 +331,7 @@ export const models = {
 
 export const anomalies = {
   list: (
-    params?: { model_id?: number; label?: string; limit?: number },
+    params?: { model_id?: number; subject_id?: number; label?: string; limit?: number },
     opts?: RequestOpts,
   ) => api.get<Anomaly[]>("/anomalies", { params, signal: opts?.signal }),
   label: (eventId: number, label: string, note?: string) =>

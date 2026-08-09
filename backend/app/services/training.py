@@ -165,7 +165,7 @@ def run_training_job(dataset_id: int, user_id: int) -> None:
         _train_impl(dataset_id, user_id)
 
 
-def _retrain_impl(subject_id: int, user_id: int) -> dict:
+def _retrain_impl(subject_id: int, user_id: int, forced_algorithm: Optional[str] = None) -> dict:
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
     db = SessionLocal()
     model_row: Optional[Model] = None
@@ -176,15 +176,22 @@ def _retrain_impl(subject_id: int, user_id: int) -> dict:
 
         previous_active = db.query(Model).filter_by(subject_id=subject.id, is_active=True).first()
         old_epsilon = previous_active.threshold.epsilon if previous_active and previous_active.threshold else None
-        # Reuse the previous active model's algorithm ("same algorithm, latest
-        # data"); if the Subject has never been trained, fall back to the router.
-        if previous_active:
-            algo, reason = previous_active.algorithm, previous_active.selection_reason
+
+        if forced_algorithm:
+            # Advanced mode: the user picked the algorithm at upload time, so
+            # the router is deliberately skipped -- same escape hatch as
+            # train-alternative, just exercised on the very first training run.
+            algo, reason, selection_mode = forced_algorithm, "Manually selected by user (Advanced mode)", "manual"
+        elif previous_active:
+            # Reuse the previous active model's algorithm ("same algorithm, latest
+            # data"); if the Subject has never been trained, fall back to the router.
+            algo, reason, selection_mode = previous_active.algorithm, previous_active.selection_reason, "auto"
         else:
             df_preview = _load_subject_dataframe(subject)
             from app.ml_core.profiler import profile_dataset
 
             algo, reason = choose_model(profile_dataset(df_preview))
+            selection_mode = "auto"
 
         model_row = Model(
             user_id=user_id,
@@ -192,7 +199,7 @@ def _retrain_impl(subject_id: int, user_id: int) -> dict:
             dataset_id=subject.datasets[-1].id,  # most recent dataset, for reference/lineage only
             algorithm=algo,
             selection_reason=reason,
-            selection_mode="auto",
+            selection_mode=selection_mode,
             is_active=False,  # flipped on only after training succeeds
             status="training",
         )
@@ -239,12 +246,12 @@ def _retrain_impl(subject_id: int, user_id: int) -> dict:
         db.close()
 
 
-def run_retrain_job(subject_id: int, user_id: int) -> dict:
+def run_retrain_job(subject_id: int, user_id: int, forced_algorithm: Optional[str] = None) -> dict:
     with _TRAIN_LOCK:
-        return _retrain_impl(subject_id, user_id)
+        return _retrain_impl(subject_id, user_id, forced_algorithm)
 
 
-def run_retrain_job_background(subject_id: int, user_id: int) -> None:
+def run_retrain_job_background(subject_id: int, user_id: int, forced_algorithm: Optional[str] = None) -> None:
     """Fire-and-forget variant for FastAPI BackgroundTasks (e.g. a bulk
     upload/commit that just created several Subjects at once, each needing
     its first training run) -- same lock and impl as run_retrain_job, but
@@ -253,7 +260,7 @@ def run_retrain_job_background(subject_id: int, user_id: int) -> None:
     HTTP response by the time a background task runs."""
     try:
         with _TRAIN_LOCK:
-            _retrain_impl(subject_id, user_id)
+            _retrain_impl(subject_id, user_id, forced_algorithm)
     except Exception:
         logger.exception("Background retrain failed for subject %s", subject_id)
 

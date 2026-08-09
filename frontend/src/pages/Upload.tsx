@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Input } from "../components/Input";
 import { useToast } from "../components/Toast";
+import { useAdvancedMode } from "../hooks/useAdvancedMode";
 import {
   datasets,
   errorMessage,
@@ -32,10 +33,15 @@ function estimateTimeGroups(sampleRange: [string, string], period: SplitPeriod):
   return Math.max(1, Math.ceil((end - start) / PERIOD_MS[period]) + 1);
 }
 
+type AlgorithmChoice = "auto" | "IF" | "LSTM";
+
 export default function Upload() {
+  const { enabled: advancedMode } = useAdvancedMode();
+
   const [dragging, setDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null);
+  const [algorithm, setAlgorithm] = useState<AlgorithmChoice>("auto");
 
   const [existingSubjects, setExistingSubjects] = useState<Subject[]>([]);
   const [target, setTarget] = useState<SubjectTarget>("new");
@@ -80,6 +86,7 @@ export default function Upload() {
       setExistingSubjectId(null);
       setSplitMode("none");
       setSplitColumn("");
+      setAlgorithm("auto");
       toast({
         tone: "success",
         title: "File analyzed",
@@ -146,6 +153,7 @@ export default function Upload() {
         subject_description: target === "new" ? newDescription.trim() || undefined : undefined,
         subject_id: target === "existing" ? existingSubjectId ?? undefined : undefined,
         split,
+        algorithm: advancedMode && algorithm !== "auto" ? algorithm : undefined,
       });
       const n = r.data.subject_ids.length;
       toast({
@@ -404,6 +412,31 @@ export default function Upload() {
                 </div>
                 {splitPreview && <p className="mt-4 text-xs font-medium text-accent">{splitPreview}</p>}
               </Card>
+
+              {advancedMode && (
+                <Card>
+                  <p className="text-sm font-semibold text-text">Algorithm</p>
+                  <p className="mt-1 text-xs text-muted">
+                    By default the router picks the best algorithm from your data's profile. Advanced mode lets
+                    you override that for this upload.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(["auto", "IF", "LSTM"] as AlgorithmChoice[]).map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => setAlgorithm(a)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          algorithm === a
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border text-muted hover:text-text"
+                        }`}
+                      >
+                        {a === "auto" ? "Auto (recommended)" : a === "IF" ? "Isolation Forest" : "LSTM Autoencoder"}
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               <Button onClick={commit} loading={committing} disabled={!canCommit} className="w-full sm:w-auto">
                 Analyze &amp; train

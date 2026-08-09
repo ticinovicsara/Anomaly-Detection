@@ -36,6 +36,47 @@ def test_create_subject(client, auth_headers):
     assert body["n_models"] == 0
     assert body["n_anomalies"] == 0
     assert body["active_epsilon"] is None
+    assert body["active_model_id"] is None
+    assert body["active_mu"] is None
+    assert body["active_sigma"] is None
+    assert body["active_z_multiplier"] is None
+
+
+def test_subject_out_exposes_active_model_threshold_fields(client, auth_headers):
+    """Settings needs mu/sigma/z_multiplier per-Subject (not per-model) to
+    render a slider without an extra detail fetch per subject."""
+    from app.db.models import Dataset, Model, Subject, Threshold, User
+
+    db = TestingSession()
+    try:
+        user = db.query(User).first()
+        subject = Subject(user_id=user.id, name="With model")
+        db.add(subject)
+        db.commit()
+        db.refresh(subject)
+
+        dataset = Dataset(user_id=user.id, subject_id=subject.id, name="d.csv", file_path="/tmp/d.csv", n_rows=10, n_features=1)
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+
+        model = Model(user_id=user.id, subject_id=subject.id, dataset_id=dataset.id, algorithm="IF", status="ready", is_active=True)
+        db.add(model)
+        db.commit()
+        db.refresh(model)
+
+        db.add(Threshold(model_id=model.id, mu=0.1, sigma=0.02, epsilon=0.16, z_multiplier=3.0))
+        db.commit()
+        subject_id, model_id = subject.id, model.id
+    finally:
+        db.close()
+
+    r = client.get(f"/subjects/{subject_id}", headers=auth_headers)
+    body = r.json()
+    assert body["active_model_id"] == model_id
+    assert body["active_mu"] == pytest.approx(0.1)
+    assert body["active_sigma"] == pytest.approx(0.02)
+    assert body["active_z_multiplier"] == pytest.approx(3.0)
 
 
 def test_create_subject_duplicate_name_rejected(client, auth_headers):
@@ -162,6 +203,57 @@ def test_delete_subject_cascades_datasets_models_and_anomalies(client, auth_head
         assert db.query(Prediction).count() == 0
     finally:
         db.close()
+
+
+def test_anomalies_subject_filter(client, auth_headers):
+    """/anomalies?subject_id=... only returns anomalies whose model belongs
+    to that subject -- the filter chip on the Anomalies page depends on
+    this joining through Prediction -> Model correctly."""
+    from app.db.models import AnomalyEvent, Dataset, Model, Prediction, Subject, User
+
+    db = TestingSession()
+    try:
+        user = db.query(User).first()
+        subject_a = Subject(user_id=user.id, name="A")
+        subject_b = Subject(user_id=user.id, name="B")
+        db.add_all([subject_a, subject_b])
+        db.commit()
+        db.refresh(subject_a)
+        db.refresh(subject_b)
+
+        events = {}
+        for subject in (subject_a, subject_b):
+            dataset = Dataset(user_id=user.id, subject_id=subject.id, name="d.csv", file_path="/tmp/d.csv", n_rows=10, n_features=1)
+            db.add(dataset)
+            db.commit()
+            db.refresh(dataset)
+
+            model = Model(user_id=user.id, subject_id=subject.id, dataset_id=dataset.id, algorithm="IF", status="ready")
+            db.add(model)
+            db.commit()
+            db.refresh(model)
+
+            pred = Prediction(model_id=model.id, window_idx=0, score=1.0, is_anomaly=True)
+            db.add(pred)
+            db.commit()
+            db.refresh(pred)
+
+            event = AnomalyEvent(prediction_id=pred.id, user_id=user.id, severity="warning")
+            db.add(event)
+            db.commit()
+            db.refresh(event)
+            events[subject.id] = event.id
+
+        subject_a_id = subject_a.id
+    finally:
+        db.close()
+
+    r = client.get("/anomalies", headers=auth_headers, params={"subject_id": subject_a_id})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["id"] == events[subject_a_id]
+    assert body[0]["subject_id"] == subject_a_id
 
 
 def test_retrain_requires_data(client, auth_headers):
