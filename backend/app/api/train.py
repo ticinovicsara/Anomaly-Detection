@@ -24,8 +24,7 @@ def train(
     if not is_training_slot_free():
         raise HTTPException(status.HTTP_409_CONFLICT, "Another training is in progress, try again in a few minutes")
 
-    # Preview the router's decision so the user sees WHY without waiting for training
-    algo, reason = choose_model(dataset.profile_json or {})
+    algo, reason = choose_model(dataset.profile_json or {})  # preview, before training starts
 
     background_tasks.add_task(run_training_job, dataset.id, user.id)
     return {"status": "training_started", "algorithm_chosen": algo, "reason": reason}
