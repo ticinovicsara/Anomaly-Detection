@@ -1,13 +1,7 @@
-"""Analyzes an uploaded CSV for viable ways to split it into multiple
-Subjects (by an identifier column, or by time period). Dataset-agnostic by
-design -- this looks only at column dtypes/cardinality, never at column
-names or domain knowledge, so it works identically on MIT-BIH, Credit Card
-Fraud, or a CSV nobody involved in this project has ever seen.
-
-Every heuristic is wrapped so a single bad column can never crash the
-request -- real user CSVs have mixed types, huge cardinality, garbage
-values, all of it.
-"""
+"""Analyzes an uploaded CSV for viable Subject splits (by ID column or
+time period). Looks only at dtype/cardinality, never column names --
+dataset-agnostic by design. Every heuristic is wrapped in try/except;
+a bad column must never crash the request."""
 import warnings
 from typing import Literal
 
@@ -16,22 +10,17 @@ import pandas.api.types as ptypes
 
 
 def analyze_split_options(df: pd.DataFrame) -> dict:
-    """Look at a dataframe and return which split strategies are viable.
-    Never crashes -- always returns something, even for a single-row or
-    all-numeric-junk CSV."""
+    """Never crashes -- always returns something, even for junk input."""
     result: dict = {
         "n_rows": len(df),
         "candidate_id_columns": [],
         "candidate_time_columns": [],
+        "candidate_label_columns": [],
     }
 
     for col in df.columns:
-        # ID candidates: string or integer dtype with a "reasonable" number
-        # of distinct values -- enough to be worth splitting on, not so many
-        # that every row would become its own Subject. Uses is_string_dtype
-        # rather than `dtype == object`: pandas 2.x/3.x can back plain text
-        # columns with a dedicated "str" dtype instead of legacy "object",
-        # and `== object` silently stops matching them.
+        # is_string_dtype not `dtype == object`: pandas 2.x/3.x may back text
+        # columns with a "str" dtype that `== object` silently misses.
         try:
             dtype = df[col].dtype
             if ptypes.is_string_dtype(dtype) or ptypes.is_integer_dtype(dtype):
@@ -47,11 +36,24 @@ def analyze_split_options(df: pd.DataFrame) -> dict:
         except Exception:
             pass
 
-        # Time candidates: the column parses as a datetime for at least a
-        # sample of its values. Restricted to string/object columns --
-        # pd.to_datetime happily reinterprets any bare float or int as a
-        # nanosecond-since-epoch timestamp and "succeeds", which would
-        # flag every numeric measurement column as a time candidate.
+        # Label candidates: any column with exactly 2 distinct values.
+        try:
+            uniq_vals = df[col].dropna().unique()
+            if len(uniq_vals) == 2:
+                counts = df[col].value_counts()
+                minority_ratio = float(counts.min() / counts.sum())
+                result["candidate_label_columns"].append(
+                    {
+                        "column": str(col),
+                        "example_values": [str(v) for v in uniq_vals[:2]],
+                        "minority_ratio": minority_ratio,
+                    }
+                )
+        except Exception:
+            pass
+
+        # Restricted to string/object dtype: pd.to_datetime otherwise
+        # reinterprets any float/int as a nanosecond timestamp and "succeeds".
         try:
             if not (ptypes.is_string_dtype(df[col].dtype) or ptypes.is_object_dtype(df[col].dtype)):
                 continue
@@ -59,12 +61,7 @@ def analyze_split_options(df: pd.DataFrame) -> dict:
             if sample.empty:
                 continue
             with warnings.catch_warnings():
-                # dateutil's per-element fallback (triggered when trying
-                # non-date text like a "p0"/"p1" id column) is noisy but
-                # harmless here -- the whole block is already wrapped in
-                # try/except and any parse failure is treated as "not a
-                # time column", which is exactly what we want.
-                warnings.simplefilter("ignore", UserWarning)
+                warnings.simplefilter("ignore", UserWarning)  # dateutil noise on non-date text
                 parsed = pd.to_datetime(sample, errors="raise")
             result["candidate_time_columns"].append(
                 {
@@ -79,9 +76,8 @@ def analyze_split_options(df: pd.DataFrame) -> dict:
 
 
 def split_by_column(df: pd.DataFrame, column: str) -> dict[str, pd.DataFrame]:
-    """Return {group_key: df_slice}. Group key is stringified so it can be
-    used directly as a Subject name. The split column itself is dropped
-    from each slice -- it's now redundant (every row in a slice shares it)."""
+    """{group_key: df_slice}; key is stringified (used as Subject name),
+    split column dropped from each slice."""
     if column not in df.columns:
         raise ValueError(f"Column '{column}' not found")
     return {str(k): g.drop(columns=[column]).reset_index(drop=True) for k, g in df.groupby(column)}
