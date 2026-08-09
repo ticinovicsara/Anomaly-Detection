@@ -1,14 +1,7 @@
-"""Training service — runs in a background task so /train returns immediately.
-
-Single global lock (`_TRAIN_LOCK`) prevents two heavy trainings running at once
-in the same process — see guardrail #4 in Implementation_Plan.md §12.
-
-Subject-aware entry points (run_retrain_job / run_train_alternative_job) run
-synchronously under the same lock instead of as a background task: their
-callers (the /subjects/{id}/retrain and /subjects/{id}/train-alternative
-endpoints) need the computed before/after epsilon back in the HTTP response
-itself, not a "started" placeholder.
-"""
+"""Training service. `_TRAIN_LOCK` caps training at one job at a time
+(Implementation_Plan.md §12 guardrail #4). Retrain/train-alternative run
+synchronously under the lock (not as a background task) because their
+callers need the before/after epsilon in the HTTP response itself."""
 import logging
 import os
 import threading
@@ -21,6 +14,7 @@ import pandas as pd
 from app.core.config import settings
 from app.db.models import Dataset, Model, Subject, Threshold
 from app.db.session import SessionLocal
+from app.ml_core.evaluation import coerce_binary_label, evaluate_on_test
 from app.ml_core.model_router import choose_model
 from app.ml_core.models.isolation_forest import IFModel
 from app.ml_core.preprocessing import (
@@ -42,15 +36,27 @@ def is_training_slot_free() -> bool:
     return not _TRAIN_LOCK.locked()
 
 
-def _fit_and_calibrate(df: pd.DataFrame, algo: str, base_path: str) -> dict:
-    """Core fit + calibrate step shared by every training entry point.
-    Returns a dict of everything the caller needs to populate a Model row,
-    or raises ValueError on data that isn't trainable."""
+def _fit_and_calibrate(df: pd.DataFrame, algo: str, base_path: str, label_column: Optional[str] = None) -> dict:
+    """Shared by every training entry point. Raises ValueError if untrainable."""
+    label_series = None
+    if label_column and label_column in df.columns:
+        try:
+            label_series = coerce_binary_label(df[label_column])
+        except Exception:
+            logger.warning("Column %r is not usable as a binary label, skipping evaluation", label_column)
+        df = df.drop(columns=[label_column])
+
     df = numeric_only(df)
     if df.empty:
         raise ValueError("Dataset contains no numeric columns")
 
-    train_df, val_df, _test_df = temporal_split(df)
+    if label_series is not None:
+        label_series = label_series.reindex(df.index)
+        train_df, val_df, test_df, _train_lbl, _val_lbl, test_lbl = temporal_split(df, labels=label_series)
+    else:
+        train_df, val_df, test_df = temporal_split(df)
+        test_lbl = None
+
     if len(train_df) < 20 or len(val_df) < 5:
         raise ValueError(f"Not enough data (train={len(train_df)}, val={len(val_df)})")
 
@@ -81,6 +87,7 @@ def _fit_and_calibrate(df: pd.DataFrame, algo: str, base_path: str) -> dict:
         val_scores = m.score(X_val)
 
     thr = calibrate_threshold(np.asarray(val_scores), z=3.0)
+    evaluation = evaluate_on_test(m, algo, test_df, test_lbl, scaler, thr["epsilon"])
 
     return {
         "model_path": model_path,
@@ -93,13 +100,12 @@ def _fit_and_calibrate(df: pd.DataFrame, algo: str, base_path: str) -> dict:
             "n_val_samples": int(len(X_val)),
         },
         "threshold": thr,
+        "evaluation": evaluation,
     }
 
 
 def _load_subject_dataframe(subject: Subject) -> pd.DataFrame:
-    """Concatenate every one of a Subject's uploaded datasets into one
-    dataframe -- "multi-dataset per Subject" from the design spec (a Subject
-    can get more data later; retrain trains on everything it has)."""
+    """Concatenates all of a Subject's datasets -- retrain uses everything it has."""
     frames = []
     for ds in subject.datasets:
         try:
@@ -109,6 +115,18 @@ def _load_subject_dataframe(subject: Subject) -> pd.DataFrame:
     if not frames:
         raise ValueError("Subject has no readable datasets")
     return pd.concat(frames, ignore_index=True)
+
+
+def _subject_label_column(subject: Subject) -> Optional[str]:
+    """First label_column found among the Subject's datasets, if any."""
+    for ds in subject.datasets:
+        if ds.label_column:
+            return ds.label_column
+    return None
+
+
+def _metrics_with_evaluation(fit: dict) -> dict:
+    return {**fit["metrics"], "evaluation": fit["evaluation"]}
 
 
 def _train_impl(dataset_id: int, user_id: int) -> None:
@@ -137,13 +155,13 @@ def _train_impl(dataset_id: int, user_id: int) -> None:
 
         df = pd.read_csv(dataset.file_path)
         base_path = os.path.join(settings.STORAGE_PATH, f"user{user_id}_ds{dataset_id}_m{model_row.id}")
-        fit = _fit_and_calibrate(df, algo, base_path)
+        fit = _fit_and_calibrate(df, algo, base_path, dataset.label_column)
 
         model_row.model_path = fit["model_path"]
         model_row.scaler_path = fit["scaler_path"]
         model_row.trained_at = datetime.utcnow()
         model_row.status = "ready"
-        model_row.metrics_json = fit["metrics"]
+        model_row.metrics_json = _metrics_with_evaluation(fit)
 
         thr = fit["threshold"]
         db.add(Threshold(model_id=model_row.id, mu=thr["mu"], sigma=thr["sigma"], epsilon=thr["epsilon"], z_multiplier=thr["z_multiplier"]))
@@ -160,7 +178,6 @@ def _train_impl(dataset_id: int, user_id: int) -> None:
 
 
 def run_training_job(dataset_id: int, user_id: int) -> None:
-    """Public entry point. Acquires the lock, runs training, releases the lock."""
     with _TRAIN_LOCK:
         _train_impl(dataset_id, user_id)
 
@@ -178,13 +195,9 @@ def _retrain_impl(subject_id: int, user_id: int, forced_algorithm: Optional[str]
         old_epsilon = previous_active.threshold.epsilon if previous_active and previous_active.threshold else None
 
         if forced_algorithm:
-            # Advanced mode: the user picked the algorithm at upload time, so
-            # the router is deliberately skipped -- same escape hatch as
-            # train-alternative, just exercised on the very first training run.
+            # Advanced mode: router deliberately skipped.
             algo, reason, selection_mode = forced_algorithm, "Manually selected by user (Advanced mode)", "manual"
         elif previous_active:
-            # Reuse the previous active model's algorithm ("same algorithm, latest
-            # data"); if the Subject has never been trained, fall back to the router.
             algo, reason, selection_mode = previous_active.algorithm, previous_active.selection_reason, "auto"
         else:
             df_preview = _load_subject_dataframe(subject)
@@ -209,13 +222,13 @@ def _retrain_impl(subject_id: int, user_id: int, forced_algorithm: Optional[str]
 
         df = _load_subject_dataframe(subject)
         base_path = os.path.join(settings.STORAGE_PATH, f"user{user_id}_subj{subject.id}_m{model_row.id}")
-        fit = _fit_and_calibrate(df, algo, base_path)
+        fit = _fit_and_calibrate(df, algo, base_path, _subject_label_column(subject))
 
         model_row.model_path = fit["model_path"]
         model_row.scaler_path = fit["scaler_path"]
         model_row.trained_at = datetime.utcnow()
         model_row.status = "ready"
-        model_row.metrics_json = fit["metrics"]
+        model_row.metrics_json = _metrics_with_evaluation(fit)
         db.commit()
 
         thr = fit["threshold"]
@@ -252,12 +265,8 @@ def run_retrain_job(subject_id: int, user_id: int, forced_algorithm: Optional[st
 
 
 def run_retrain_job_background(subject_id: int, user_id: int, forced_algorithm: Optional[str] = None) -> None:
-    """Fire-and-forget variant for FastAPI BackgroundTasks (e.g. a bulk
-    upload/commit that just created several Subjects at once, each needing
-    its first training run) -- same lock and impl as run_retrain_job, but
-    never raises. Failure is already recorded on the Model row by
-    _retrain_impl; there's no request left to turn a raised error into an
-    HTTP response by the time a background task runs."""
+    """Fire-and-forget for BackgroundTasks -- never raises (no request left
+    to receive the error; failure is already recorded on the Model row)."""
     try:
         with _TRAIN_LOCK:
             _retrain_impl(subject_id, user_id, forced_algorithm)
@@ -290,13 +299,13 @@ def _train_alternative_impl(subject_id: int, user_id: int, algorithm: str) -> di
 
         df = _load_subject_dataframe(subject)
         base_path = os.path.join(settings.STORAGE_PATH, f"user{user_id}_subj{subject.id}_alt_m{model_row.id}")
-        fit = _fit_and_calibrate(df, algorithm, base_path)
+        fit = _fit_and_calibrate(df, algorithm, base_path, _subject_label_column(subject))
 
         model_row.model_path = fit["model_path"]
         model_row.scaler_path = fit["scaler_path"]
         model_row.trained_at = datetime.utcnow()
         model_row.status = "ready"
-        model_row.metrics_json = fit["metrics"]
+        model_row.metrics_json = _metrics_with_evaluation(fit)
         db.commit()
 
         thr = fit["threshold"]
