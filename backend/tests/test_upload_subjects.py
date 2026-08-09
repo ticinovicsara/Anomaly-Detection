@@ -197,6 +197,106 @@ def test_commit_cannot_use_another_users_temp_id(client, auth_headers):
     assert r.status_code == 404
 
 
+def _labeled_csv_bytes(n_normal=595, n_test=105):
+    """Train/val (n_normal rows, chronologically first) are all normal;
+    the trailing n_test rows alternate normal/anomalous with a binary
+    label column, so the whole thing forms one 700-row CSV whose 70/15/15
+    temporal_split puts every anomaly in the test slice."""
+    rng = np.random.default_rng(7)
+    normal = rng.normal(0, 1, n_normal)
+    test_values = np.empty(n_test)
+    test_labels = np.zeros(n_test, dtype=int)
+    for i in range(n_test):
+        if i % 2 == 0:
+            test_values[i] = rng.normal(20, 1)
+            test_labels[i] = 1
+        else:
+            test_values[i] = rng.normal(0, 1)
+    df = pd.DataFrame(
+        {
+            "value": np.concatenate([normal, test_values]),
+            "is_anomaly": np.concatenate([np.zeros(n_normal, dtype=int), test_labels]),
+        }
+    )
+    buf = io.BytesIO()
+    df.to_csv(buf, index=False)
+    buf.seek(0)
+    return buf
+
+
+def test_analyze_detects_candidate_label_column(client, auth_headers):
+    r = client.post(
+        "/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _labeled_csv_bytes(), "text/csv")}
+    )
+    assert r.status_code == 200, r.text
+    cols = {c["column"] for c in r.json()["split_options"]["candidate_label_columns"]}
+    assert "is_anomaly" in cols
+
+
+def test_commit_with_label_column_populates_evaluation(client, auth_headers):
+    r = client.post(
+        "/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _labeled_csv_bytes(), "text/csv")}
+    )
+    temp_id = r.json()["temp_id"]
+
+    r = client.post(
+        "/upload/commit",
+        headers=auth_headers,
+        json={
+            "temp_id": temp_id,
+            "target": "new",
+            "subject_name": "Labeled subject",
+            "split": {"mode": "none"},
+            "algorithm": "IF",
+            "label_column": "is_anomaly",
+        },
+    )
+    assert r.status_code == 201, r.text
+    subject_id = r.json()["subject_ids"][0]
+
+    r = client.get(f"/subjects/{subject_id}", headers=auth_headers)
+    models = r.json()["models"]
+    assert len(models) == 1
+    ev = models[0]["evaluation"]
+    assert ev is not None
+    assert 0.0 <= ev["f1"] <= 1.0
+    assert ev["n_test_positive"] > 0
+
+
+def test_commit_without_label_column_leaves_evaluation_none(client, auth_headers):
+    r = client.post("/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _csv_bytes(), "text/csv")})
+    temp_id = r.json()["temp_id"]
+
+    r = client.post(
+        "/upload/commit",
+        headers=auth_headers,
+        json={"temp_id": temp_id, "target": "new", "subject_name": "Unlabeled subject", "split": {"mode": "none"}},
+    )
+    assert r.status_code == 201, r.text
+    subject_id = r.json()["subject_ids"][0]
+
+    r = client.get(f"/subjects/{subject_id}", headers=auth_headers)
+    assert r.json()["models"][0]["evaluation"] is None
+
+
+def test_commit_rejects_unknown_label_column(client, auth_headers):
+    r = client.post("/upload/analyze", headers=auth_headers, files={"file": ("data.csv", _csv_bytes(), "text/csv")})
+    temp_id = r.json()["temp_id"]
+
+    r = client.post(
+        "/upload/commit",
+        headers=auth_headers,
+        json={
+            "temp_id": temp_id,
+            "target": "new",
+            "subject_name": "X",
+            "split": {"mode": "none"},
+            "label_column": "does_not_exist",
+        },
+    )
+    assert r.status_code == 400
+
+
 def test_original_upload_endpoint_still_works_unsplit(client, auth_headers):
     """Backward compat: the plain POST /upload endpoint is untouched by
     Phase 3 -- always lands on the user's default Subject, no splitting."""
