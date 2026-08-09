@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import current_user
-from app.db.models import AnomalyEvent, Dataset, Model, Prediction, Subject, User
+from app.db.models import AnomalyEvent, DataReviewCandidate, Dataset, Model, Prediction, Subject, User
 from app.db.session import get_db
+from app.services.data_review import ensure_review_candidates
 from app.services.subjects import get_active_model, set_active_model
 from app.services.training import is_training_slot_free, run_retrain_job, run_train_alternative_job
 
@@ -21,6 +22,7 @@ class SubjectCreate(BaseModel):
 class SubjectUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = Field(default=None, max_length=2000)
+    pre_retrain_check_enabled: Optional[bool] = None
 
 
 class ThresholdOut(BaseModel):
@@ -28,6 +30,33 @@ class ThresholdOut(BaseModel):
     sigma: float
     epsilon: float
     z_multiplier: float
+
+
+class ConfusionOut(BaseModel):
+    tp: int
+    fp: int
+    tn: int
+    fn: int
+
+
+class CurvePointOut(BaseModel):
+    i: int
+    score: float
+    actual: int
+    predicted: int
+
+
+class EvaluationOut(BaseModel):
+    precision: float
+    recall: float
+    f1: float
+    auc: Optional[float]
+    n_test_samples: int
+    n_test_positive: int
+    # Diagnostics-only; optional so older persisted evaluation blobs still parse.
+    epsilon: Optional[float] = None
+    confusion: Optional[ConfusionOut] = None
+    curve: Optional[list[CurvePointOut]] = None
 
 
 class SubjectOut(BaseModel):
@@ -46,6 +75,24 @@ class SubjectOut(BaseModel):
     active_mu: Optional[float]
     active_sigma: Optional[float]
     active_z_multiplier: Optional[float]
+    # Accuracy-at-a-glance for the Subjects list; full EvaluationOut stays on the Model detail.
+    active_f1: Optional[float] = None
+    active_auc: Optional[float] = None
+    pre_retrain_check_enabled: bool = False
+
+
+class DataReviewCandidateOut(BaseModel):
+    id: int
+    dataset_id: int
+    row_index: int
+    score: float
+    row_preview: dict
+    label: str
+    created_at: str
+
+
+class DataReviewLabelIn(BaseModel):
+    label: str = Field(pattern="^(confirmed|false_positive|unlabeled)$")
 
 
 class DatasetOut(BaseModel):
@@ -65,6 +112,7 @@ class ModelOut(BaseModel):
     is_active: bool
     trained_at: Optional[str]
     threshold: Optional[ThresholdOut]
+    evaluation: Optional[EvaluationOut] = None
 
 
 class SubjectDetailOut(SubjectOut):
@@ -107,6 +155,7 @@ def _anomaly_count(db: Session, subject_id: int) -> int:
 
 
 def _model_out(m: Model) -> ModelOut:
+    evaluation = (m.metrics_json or {}).get("evaluation") if m.metrics_json else None
     return ModelOut(
         id=m.id,
         algorithm=m.algorithm,
@@ -120,11 +169,13 @@ def _model_out(m: Model) -> ModelOut:
         )
         if m.threshold
         else None,
+        evaluation=EvaluationOut(**evaluation) if evaluation else None,
     )
 
 
 def _subject_out(db: Session, subject: Subject) -> SubjectOut:
     active = get_active_model(subject, db)
+    active_eval = (active.metrics_json or {}).get("evaluation") if active and active.metrics_json else None
     return SubjectOut(
         id=subject.id,
         name=subject.name,
@@ -141,6 +192,21 @@ def _subject_out(db: Session, subject: Subject) -> SubjectOut:
         active_mu=active.threshold.mu if active and active.threshold else None,
         active_sigma=active.threshold.sigma if active and active.threshold else None,
         active_z_multiplier=active.threshold.z_multiplier if active and active.threshold else None,
+        active_f1=active_eval.get("f1") if active_eval else None,
+        active_auc=active_eval.get("auc") if active_eval else None,
+        pre_retrain_check_enabled=subject.pre_retrain_check_enabled,
+    )
+
+
+def _candidate_out(c: DataReviewCandidate) -> DataReviewCandidateOut:
+    return DataReviewCandidateOut(
+        id=c.id,
+        dataset_id=c.dataset_id,
+        row_index=c.row_index,
+        score=c.score,
+        row_preview=c.row_preview or {},
+        label=c.label,
+        created_at=c.created_at.isoformat(),
     )
 
 
@@ -199,6 +265,8 @@ def update_subject(
         subject.name = body.name
     if body.description is not None:
         subject.description = body.description
+    if body.pre_retrain_check_enabled is not None:
+        subject.pre_retrain_check_enabled = body.pre_retrain_check_enabled
     db.commit()
     db.refresh(subject)
     return _subject_out(db, subject)
@@ -213,10 +281,30 @@ def delete_subject(subject_id: int, user: User = Depends(current_user), db: Sess
 
 
 @router.post("/{subject_id}/retrain", response_model=RetrainOut)
-def retrain_subject(subject_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def retrain_subject(
+    subject_id: int, force: bool = False, user: User = Depends(current_user), db: Session = Depends(get_db)
+):
     subject = _owned_subject(db, subject_id, user)
     if not subject.datasets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Subject has no data to train on")
+
+    # Off by default (Subject.pre_retrain_check_enabled); force=true always bypasses.
+    if subject.pre_retrain_check_enabled and not force:
+        latest_dataset = subject.datasets[-1]
+        candidates = ensure_review_candidates(db, subject, latest_dataset)
+        pending = [c for c in candidates if c.label == "unlabeled"]
+        if pending:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "message": (
+                        f"{len(pending)} row(s) in the newest data look potentially anomalous and haven't "
+                        "been reviewed yet. Review them, or retrain anyway."
+                    ),
+                    "pending_candidates": [_candidate_out(c).model_dump() for c in pending],
+                },
+            )
+
     if not is_training_slot_free():
         raise HTTPException(status.HTTP_409_CONFLICT, "Another training is in progress, try again in a few minutes")
     try:
@@ -224,6 +312,50 @@ def retrain_subject(subject_id: int, user: User = Depends(current_user), db: Ses
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     return RetrainOut(**result)
+
+
+@router.post("/{subject_id}/data-review/precheck", response_model=list[DataReviewCandidateOut])
+def precheck_data_review(subject_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Runs (or reuses) the candidate-anomaly scan on the newest dataset."""
+    subject = _owned_subject(db, subject_id, user)
+    if not subject.datasets:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Subject has no data to check")
+    candidates = ensure_review_candidates(db, subject, subject.datasets[-1])
+    return [_candidate_out(c) for c in candidates]
+
+
+@router.get("/{subject_id}/data-review/candidates", response_model=list[DataReviewCandidateOut])
+def list_data_review_candidates(subject_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    subject = _owned_subject(db, subject_id, user)
+    rows = (
+        db.query(DataReviewCandidate)
+        .filter(DataReviewCandidate.subject_id == subject.id)
+        .order_by(DataReviewCandidate.score.desc())
+        .all()
+    )
+    return [_candidate_out(c) for c in rows]
+
+
+@router.patch("/{subject_id}/data-review/candidates/{candidate_id}", response_model=DataReviewCandidateOut)
+def label_data_review_candidate(
+    subject_id: int,
+    candidate_id: int,
+    body: DataReviewLabelIn,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    subject = _owned_subject(db, subject_id, user)
+    candidate = (
+        db.query(DataReviewCandidate)
+        .filter(DataReviewCandidate.id == candidate_id, DataReviewCandidate.subject_id == subject.id)
+        .first()
+    )
+    if not candidate:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
+    candidate.label = body.label
+    db.commit()
+    db.refresh(candidate)
+    return _candidate_out(candidate)
 
 
 @router.post("/{subject_id}/train-alternative", response_model=TrainAlternativeOut)
