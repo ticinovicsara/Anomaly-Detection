@@ -46,6 +46,7 @@ def list_models(user: User = Depends(current_user), db: Session = Depends(get_db
         out.append({
             "id": m.id,
             "dataset_id": m.dataset_id,
+            "subject_id": m.subject_id,
             "algorithm": m.algorithm,
             "status": m.status,
             "selection_reason": m.selection_reason,

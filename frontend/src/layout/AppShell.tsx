@@ -5,8 +5,10 @@ import {
   Activity,
   LayoutDashboard,
   Upload as UploadIcon,
+  Users,
   Brain,
   AlertTriangle,
+  FlaskConical,
   Settings as SettingsIcon,
   Menu,
   X,
@@ -21,8 +23,10 @@ import { logout, useAuth } from "../hooks/useAuth";
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/upload", label: "Upload", icon: UploadIcon },
+  { to: "/subjects", label: "Subjects", icon: Users },
   { to: "/models", label: "Models", icon: Brain },
   { to: "/anomalies", label: "Anomalies", icon: AlertTriangle },
+  { to: "/experiments", label: "Experiments", icon: FlaskConical },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

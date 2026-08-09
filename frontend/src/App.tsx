@@ -13,6 +13,9 @@ import Settings from "./pages/Settings";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Models = lazy(() => import("./pages/Models"));
+const Subjects = lazy(() => import("./pages/Subjects"));
+const SubjectDetail = lazy(() => import("./pages/SubjectDetail"));
+const Experiments = lazy(() => import("./pages/Experiments"));
 
 function ProtectedLayout() {
   const { isAuthed, loading } = useAuth();
@@ -55,8 +58,11 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<Upload />} />
+          <Route path="/subjects" element={<Subjects />} />
+          <Route path="/subjects/:id" element={<SubjectDetail />} />
           <Route path="/models" element={<Models />} />
           <Route path="/anomalies" element={<Anomalies />} />
+          <Route path="/experiments" element={<Experiments />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

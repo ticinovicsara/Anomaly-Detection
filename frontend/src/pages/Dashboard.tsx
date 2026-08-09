@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Activity,
-  AlertTriangle,
-  Brain,
-  Database,
-  Upload as UploadIcon,
-} from "lucide-react";
+import { Activity, AlertTriangle, Brain, Users, Upload as UploadIcon } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -22,22 +16,33 @@ import { Card, StatCard } from "../components/Card";
 import { Badge, severityTone, statusTone } from "../components/Badge";
 import { DashboardSkeleton } from "../components/Skeleton";
 import { StaggerGroup, StaggerItem } from "../components/Stagger";
-import { anomalies as anomaliesApi, isCancelled, models as modelsApi, Anomaly, ModelInfo } from "../api/client";
+import {
+  anomalies as anomaliesApi,
+  isCancelled,
+  models as modelsApi,
+  subjects as subjectsApi,
+  Anomaly,
+  ModelInfo,
+  Subject,
+} from "../api/client";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [recent, setRecent] = useState<Anomaly[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
       modelsApi.list({ signal: controller.signal }),
       anomaliesApi.list({ limit: 30 }, { signal: controller.signal }),
+      subjectsApi.list({ signal: controller.signal }),
     ])
-      .then(([m, a]) => {
+      .then(([m, a, s]) => {
         setModels(m.data);
         setRecent(a.data);
+        setSubjects(s.data);
       })
       .catch((err) => {
         if (!isCancelled(err)) throw err;
@@ -62,6 +67,12 @@ export default function Dashboard() {
     .map((a) => ({ idx: a.window_idx, score: a.score }));
   const currentEpsilon = readyModels[0]?.threshold?.epsilon ?? null;
 
+  const subjectById = new Map(subjects.map((s) => [s.id, s]));
+  const trainedSubjects = subjects.filter((s) => s.active_epsilon !== null).sort((a, b) => (a.active_epsilon ?? 0) - (b.active_epsilon ?? 0));
+  const maxEpsilon = Math.max(...trainedSubjects.map((s) => s.active_epsilon ?? 0), 0.0001);
+  const minEpsilon = Math.min(...trainedSubjects.map((s) => s.active_epsilon ?? Infinity));
+  const spreadRatio = minEpsilon > 0 && trainedSubjects.length > 1 ? maxEpsilon / minEpsilon : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -69,7 +80,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-muted">
-            Overview of your models and recently detected anomalies.
+            Overview of your subjects, models, and recently detected anomalies.
           </p>
         </div>
         <Link to="/upload">
@@ -99,11 +110,9 @@ export default function Dashboard() {
           />
         </StaggerItem>
         <StaggerItem>
-          <StatCard
-            label="Datasets"
-            value={new Set(models.map((m) => m.dataset_id)).size}
-            icon={<Database className="h-5 w-5" />}
-          />
+          <Link to="/subjects">
+            <StatCard label="Subjects" value={subjects.length} icon={<Users className="h-5 w-5" />} />
+          </Link>
         </StaggerItem>
       </StaggerGroup>
 
@@ -181,9 +190,12 @@ export default function Dashboard() {
                     <p className="text-xs text-muted">
                       Window {a.window_idx} · score {a.score.toFixed(3)}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {new Date(a.created_at).toLocaleString()}
-                    </p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      {subjectById.get(a.subject_id) && (
+                        <Badge tone="default">{subjectById.get(a.subject_id)!.name}</Badge>
+                      )}
+                      <p className="text-xs text-muted">{new Date(a.created_at).toLocaleString()}</p>
+                    </div>
                   </div>
                   <Badge tone={severityTone(a.severity)}>{a.severity}</Badge>
                 </li>
@@ -192,6 +204,39 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+
+      {/* Threshold spread across subjects -- the visual proof that
+          personalization is non-trivial; hidden unless it's actually
+          possible to compare (2+ trained subjects). */}
+      {trainedSubjects.length > 1 && (
+        <Card>
+          <h3 className="text-sm font-semibold text-text">Threshold spread across your subjects</h3>
+          <div className="mt-4 space-y-2.5">
+            {trainedSubjects.map((s) => {
+              const pct = Math.max(4, ((s.active_epsilon ?? 0) / maxEpsilon) * 100);
+              return (
+                <Link
+                  key={s.id}
+                  to={`/subjects/${s.id}`}
+                  className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-surface-2/50"
+                >
+                  <span className="w-32 shrink-0 truncate text-xs text-muted">{s.name}</span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <div className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-24 shrink-0 text-right font-mono text-xs text-text">
+                    ε = {(s.active_epsilon ?? 0).toFixed(4)}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs text-muted">
+            Range: {minEpsilon.toFixed(4)} – {maxEpsilon.toFixed(4)}
+            {spreadRatio !== null && ` (${spreadRatio.toFixed(1)}× spread)`} — personalization is visibly non-trivial.
+          </p>
+        </Card>
+      )}
 
       {/* Models table */}
       <Card>
@@ -204,6 +249,7 @@ export default function Dashboard() {
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                   <th className="px-6 py-3 font-medium">ID</th>
+                  <th className="px-6 py-3 font-medium">Subject</th>
                   <th className="px-6 py-3 font-medium">Algorithm</th>
                   <th className="px-6 py-3 font-medium">Status</th>
                   <th className="px-6 py-3 font-medium">Reason</th>
@@ -214,6 +260,7 @@ export default function Dashboard() {
                 {models.map((m) => (
                   <tr key={m.id} className="border-b border-border/50 last:border-0">
                     <td className="px-6 py-3 font-mono text-muted">#{m.id}</td>
+                    <td className="px-6 py-3 text-text">{subjectById.get(m.subject_id)?.name ?? "-"}</td>
                     <td className="px-6 py-3">
                       <Badge tone="accent">{m.algorithm}</Badge>
                     </td>

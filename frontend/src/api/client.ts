@@ -106,6 +106,7 @@ export type ModelMetrics = {
 export type ModelInfo = {
   id: number;
   dataset_id: number;
+  subject_id: number;
   algorithm: "IF" | "LSTM";
   status: "pending" | "training" | "ready" | "failed";
   selection_reason: string | null;
@@ -119,6 +120,7 @@ export type Anomaly = {
   id: number;
   prediction_id: number;
   model_id: number;
+  subject_id: number;
   window_idx: number;
   score: number;
   severity: string;

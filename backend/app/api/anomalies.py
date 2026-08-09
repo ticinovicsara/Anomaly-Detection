@@ -15,6 +15,7 @@ class AnomalyOut(BaseModel):
     id: int
     prediction_id: int
     model_id: int
+    subject_id: int
     window_idx: int
     score: float
     severity: str
@@ -38,7 +39,7 @@ def list_anomalies(
 ):
     q = (
         db.query(AnomalyEvent)
-        .options(joinedload(AnomalyEvent.prediction))
+        .options(joinedload(AnomalyEvent.prediction).joinedload(Prediction.model))
         .filter(AnomalyEvent.user_id == user.id)
     )
     if label:
@@ -52,6 +53,7 @@ def list_anomalies(
             id=e.id,
             prediction_id=e.prediction_id,
             model_id=e.prediction.model_id,
+            subject_id=e.prediction.model.subject_id,
             window_idx=e.prediction.window_idx,
             score=e.prediction.score,
             severity=e.severity,
@@ -72,7 +74,7 @@ def label_anomaly(
 ):
     event = (
         db.query(AnomalyEvent)
-        .options(joinedload(AnomalyEvent.prediction))
+        .options(joinedload(AnomalyEvent.prediction).joinedload(Prediction.model))
         .filter(AnomalyEvent.id == event_id, AnomalyEvent.user_id == user.id)
         .first()
     )
@@ -88,6 +90,7 @@ def label_anomaly(
         id=event.id,
         prediction_id=event.prediction_id,
         model_id=event.prediction.model_id,
+        subject_id=event.prediction.model.subject_id,
         window_idx=event.prediction.window_idx,
         score=event.prediction.score,
         severity=event.severity,
