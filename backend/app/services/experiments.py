@@ -1,10 +1,5 @@
-"""Personalization Experiment -- the empirical proof behind thesis ch. 7.4:
-train the same pipeline independently per Subject, calibrate each threshold
-from that Subject's own data only, then show the epsilon spread and what a
-single global threshold would have cost in false positives / missed
-anomalies. Nothing here is dataset-specific; it operates on whatever
-Subjects the caller already has.
-"""
+"""Personalization Experiment (thesis ch. 7.4): per-Subject epsilon spread
+and what a single global threshold would have cost in FP/missed anomalies."""
 import logging
 import os
 from datetime import datetime
@@ -18,7 +13,7 @@ from app.core.config import settings
 from app.db.models import Dataset, Model, Subject, Threshold
 from app.services.prediction import run_prediction
 from app.services.subjects import get_active_model
-from app.services.training import _TRAIN_LOCK, _fit_and_calibrate, _load_subject_dataframe
+from app.services.training import _TRAIN_LOCK, _fit_and_calibrate, _load_subject_dataframe, _metrics_with_evaluation
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +22,25 @@ _DEMO_N_ROWS = 1500
 
 
 def _subject_scores(subject: Subject, model: Model) -> list[float]:
-    """Re-score a Subject's own data against its own active model, so the
-    cross-application comparison doesn't depend on the user having run a
-    separate /predict call first."""
+    """Re-scores a Subject's own data so the comparison doesn't need a prior /predict call."""
     df = _load_subject_dataframe(subject)
     _batch_id, results = run_prediction(model, model.threshold, df)
     return [r["score"] for r in results]
+
+
+def _stats(values: list) -> Optional[dict]:
+    """mean/std/min/max/range_ratio, shared by every stats summary below."""
+    if not values:
+        return None
+    arr = np.asarray(values, dtype=float)
+    mn, mx = float(arr.min()), float(arr.max())
+    return {
+        "mean": float(arr.mean()),
+        "std": float(arr.std()),
+        "min": mn,
+        "max": mx,
+        "range_ratio": (mx / mn) if mn > 0 else None,
+    }
 
 
 def run_personalization_experiment(subject_ids: list[int], db: Session, user_id: int) -> dict:
@@ -53,10 +61,8 @@ def run_personalization_experiment(subject_ids: list[int], db: Session, user_id:
         epsilons[s.name] = m.threshold.epsilon
         active_by_subject[s.id] = m
 
-    eps_values = list(epsilons.values())
-    mean_eps = float(np.mean(eps_values))
-    min_eps = float(min(eps_values))
-    max_eps = float(max(eps_values))
+    stats = _stats(list(epsilons.values()))
+    mean_eps = stats["mean"]
 
     fp_rate: dict[str, Optional[float]] = {}
     miss_rate: dict[str, Optional[float]] = {}
@@ -81,13 +87,7 @@ def run_personalization_experiment(subject_ids: list[int], db: Session, user_id:
     return {
         "subject_ids": [s.id for s in subjects],
         "epsilons": epsilons,
-        "statistics": {
-            "mean": mean_eps,
-            "std": float(np.std(eps_values)),
-            "min": min_eps,
-            "max": max_eps,
-            "range_ratio": (max_eps / min_eps) if min_eps > 0 else None,
-        },
+        "statistics": stats,
         "cross_application": {
             "global_epsilon": mean_eps,
             "fp_rate_at_global": fp_rate,
@@ -96,13 +96,53 @@ def run_personalization_experiment(subject_ids: list[int], db: Session, user_id:
     }
 
 
+def aggregate_evaluation_metrics(
+    db: Session, user_id: int, subject_ids: Optional[list[int]] = None
+) -> dict:
+    """Cross-Subject F1/precision/recall/AUC summary, additive to (not a
+    replacement for) each Subject's own number. Subjects with no active
+    model or no labeled evaluation are excluded, not an error."""
+    query = db.query(Subject).filter(Subject.user_id == user_id)
+    if subject_ids is not None:
+        query = query.filter(Subject.id.in_(subject_ids))
+    subjects = query.all()
+
+    f1_by_subject: dict[str, float] = {}
+    precision_values: list[float] = []
+    recall_values: list[float] = []
+    auc_values: list[float] = []
+    included_subject_ids: list[int] = []
+    excluded_subject_ids: list[int] = []
+
+    for s in subjects:
+        active = get_active_model(s, db)
+        evaluation = (active.metrics_json or {}).get("evaluation") if active and active.metrics_json else None
+        if not evaluation:
+            excluded_subject_ids.append(s.id)
+            continue
+        f1_by_subject[s.name] = evaluation["f1"]
+        precision_values.append(evaluation["precision"])
+        recall_values.append(evaluation["recall"])
+        if evaluation.get("auc") is not None:
+            auc_values.append(evaluation["auc"])
+        included_subject_ids.append(s.id)
+
+    return {
+        "subject_ids": included_subject_ids,
+        "excluded_subject_ids": excluded_subject_ids,
+        "n_labeled_subjects": len(included_subject_ids),
+        "n_unlabeled_subjects": len(excluded_subject_ids),
+        "f1_by_subject": f1_by_subject,
+        "f1_statistics": _stats(list(f1_by_subject.values())),
+        "precision_statistics": _stats(precision_values),
+        "recall_statistics": _stats(recall_values),
+        "auc_statistics": _stats(auc_values),
+    }
+
+
 def _synthetic_dataframe(noise_std: float, n_rows: int, seed: int) -> pd.DataFrame:
-    """A periodic two-channel signal with a per-subject noise level -- stands
-    in for 'the same structural process, different individual variability'
-    (what MIT-BIH patients look like structurally) without shipping a
-    specific external dataset. Same periodicity everywhere so the router
-    consistently picks the same algorithm and the demo isolates epsilon,
-    the exact thing the experiment measures, as the only variable."""
+    """Periodic 2-channel signal, noise level varies per subject; same
+    periodicity everywhere so epsilon is the only variable."""
     rng = np.random.default_rng(seed)
     t = np.arange(n_rows)
     base = np.sin(2 * np.pi * t / 50) + 0.3 * np.sin(2 * np.pi * t / 17)
@@ -117,11 +157,9 @@ def run_preset_demo(
     n_subjects: int = _DEMO_N_SUBJECTS,
     n_rows: int = _DEMO_N_ROWS,
 ) -> dict:
-    """Create `n_subjects` synthetic Subjects spanning a wide range of noise
-    levels, train each independently (same algorithm, same hyperparameters,
-    only the data differs), then run the personalization experiment across
-    them. For users who don't have real Subjects yet and want to see the
-    ch. 7.4 argument immediately."""
+    """Trains n_subjects synthetic Subjects (same algo/hyperparameters,
+    only noise differs) and runs the personalization experiment on them --
+    lets a user see the ch. 7.4 argument without real data."""
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
     demo_dir = os.path.join(settings.STORAGE_PATH, "demo")
     os.makedirs(demo_dir, exist_ok=True)
@@ -187,13 +225,13 @@ def run_preset_demo(
 
             try:
                 base_path = os.path.join(demo_dir, f"user{user_id}_demo_subj{subject.id}_m{model_row.id}")
-                fit = _fit_and_calibrate(df, "LSTM", base_path)
+                fit = _fit_and_calibrate(df, "LSTM", base_path, label_column=None)
 
                 model_row.model_path = fit["model_path"]
                 model_row.scaler_path = fit["scaler_path"]
                 model_row.trained_at = datetime.utcnow()
                 model_row.status = "ready"
-                model_row.metrics_json = fit["metrics"]
+                model_row.metrics_json = _metrics_with_evaluation(fit)
                 db.commit()
 
                 thr = fit["threshold"]
