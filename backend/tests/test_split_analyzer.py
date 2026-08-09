@@ -69,6 +69,27 @@ def test_analyze_ignores_id_column_with_too_high_cardinality():
     assert "row_uuid" not in cols
 
 
+def test_analyze_detects_binary_label_column():
+    df = pd.DataFrame(
+        {
+            "value": np.random.normal(0, 1, 100),
+            "is_anomaly": [1 if i % 10 == 0 else 0 for i in range(100)],
+        }
+    )
+    result = analyze_split_options(df)
+    cols = {c["column"] for c in result["candidate_label_columns"]}
+    assert "is_anomaly" in cols
+    entry = next(c for c in result["candidate_label_columns"] if c["column"] == "is_anomaly")
+    assert entry["minority_ratio"] == pytest.approx(0.1)
+
+
+def test_analyze_ignores_label_column_with_more_than_two_values():
+    df = pd.DataFrame({"category": [i % 3 for i in range(90)]})
+    result = analyze_split_options(df)
+    cols = {c["column"] for c in result["candidate_label_columns"]}
+    assert "category" not in cols
+
+
 def test_split_by_column():
     df = pd.DataFrame({"patient_id": ["a", "a", "b", "b", "b"], "value": [1, 2, 3, 4, 5]})
     groups = split_by_column(df, "patient_id")
