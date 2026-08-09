@@ -32,9 +32,7 @@ class User(Base):
 
 
 class Subject(Base):
-    """The entity personalization is calibrated for (a patient, a card, a
-    service) -- deliberately separate from User (the auth identity). One
-    User manages many Subjects; each Subject gets its own epsilon."""
+    """Entity personalization is calibrated for (patient/card/service) -- separate from User."""
 
     __tablename__ = "subjects"
 
@@ -42,9 +40,9 @@ class Subject(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    # "upload" | "curated:<slug>" | "kaggle:<ref>" | "split_from:<parent_id>" | "auto_default"
-    source_hint = Column(String(255), nullable=True)
+    source_hint = Column(String(255), nullable=True)  # upload | curated:<slug> | kaggle:<ref> | split_from:<id> | auto_default
     is_default = Column(Boolean, default=False, nullable=False)
+    pre_retrain_check_enabled = Column(Boolean, default=False, nullable=False)  # off by default, see services/data_review.py
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="subjects")
@@ -66,6 +64,7 @@ class Dataset(Base):
     file_path = Column(String(500), nullable=False)
     n_rows = Column(Integer)
     n_features = Column(Integer)
+    label_column = Column(String(255), nullable=True)  # optional ground-truth anomaly column, see ml_core/evaluation.py
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="datasets")
@@ -83,7 +82,7 @@ class Model(Base):
     algorithm = Column(String(50), nullable=False)  # IF | LSTM
     selection_reason = Column(Text)
     selection_mode = Column(String(20), default="auto", nullable=False)  # auto | manual
-    is_active = Column(Boolean, default=True, nullable=False)  # the Subject's "primary" model
+    is_active = Column(Boolean, default=True, nullable=False)  # the Subject's primary model
     status = Column(String(20), default="pending", nullable=False)  # pending|training|ready|failed
     model_path = Column(String(500))
     scaler_path = Column(String(500))
@@ -166,6 +165,25 @@ class Report(Base):
     period_end = Column(DateTime, nullable=False)
     file_path = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class DataReviewCandidate(Base):
+    """Pre-retrain review candidate (see services/data_review.py) -- not AnomalyEvent
+    since it comes from data with no trained Model yet."""
+
+    __tablename__ = "data_review_candidates"
+
+    id = Column(Integer, primary_key=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), index=True, nullable=False)
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="CASCADE"), index=True, nullable=False)
+    row_index = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
+    row_preview = Column(JSON, default=dict)
+    label = Column(String(30), default="unlabeled", nullable=False)  # unlabeled | confirmed | false_positive
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    subject = relationship("Subject")
+    dataset = relationship("Dataset")
 
 
 class UploadLog(Base):
