@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
-MAX_CSV_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_CSV_BYTES = 50 * 1024 * 1024
 TMP_DIR = os.path.join(settings.STORAGE_PATH, "tmp")
-TMP_EXPIRY_SECONDS = 3600  # 1 hour
+TMP_EXPIRY_SECONDS = 3600
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -109,13 +109,9 @@ def list_datasets(user: User = Depends(current_user), db: Session = Depends(get_
     ]
 
 
-# ---------------------------------------------------------------------------
-# Two-step Subject-aware upload flow: analyze (profile + split options,
-# staged to a short-lived temp file) then commit (create Subject(s), persist
-# the dataset(s), queue training). The plain POST /upload above is kept
-# as-is for programmatic/backward-compat use -- it always lands on the
-# user's default Subject with no splitting.
-# ---------------------------------------------------------------------------
+# Two-step Subject-aware flow: analyze (stage to temp file) then commit
+# (create Subject(s), queue training). Plain POST /upload above is kept
+# for backward compat -- lands on the default Subject, no splitting.
 
 
 def _cleanup_expired_tmp() -> None:
@@ -197,10 +193,8 @@ class CommitIn(BaseModel):
     subject_description: Optional[str] = Field(default=None, max_length=2000)
     subject_id: Optional[int] = None
     split: SplitConfig
-    # Advanced-mode only: overrides the router for the first training run
-    # on each Subject this commit creates. Left null for the default
-    # (router-decides) path.
-    algorithm: Optional[str] = Field(default=None, pattern="^(IF|LSTM)$")
+    algorithm: Optional[str] = Field(default=None, pattern="^(IF|LSTM)$")  # Advanced-mode router override
+    label_column: Optional[str] = Field(default=None, max_length=255)  # optional ground-truth anomaly column
 
 
 @router.post("/commit", status_code=status.HTTP_201_CREATED)
@@ -239,9 +233,10 @@ def commit_upload(
     except Exception as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Could not parse CSV: {exc}")
 
-    # (subject, dataframe, dataset_display_name) for every Subject this
-    # commit will touch -- exactly 1 unless split.mode created several.
-    targets: list[tuple[Subject, pd.DataFrame, str]] = []
+    if body.label_column and body.label_column not in df.columns:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Column '{body.label_column}' not found")
+
+    targets: list[tuple[Subject, pd.DataFrame, str]] = []  # (subject, df, dataset_name), 1 unless split created several
 
     if body.split.mode == "none":
         if body.target == "existing":
@@ -303,6 +298,7 @@ def commit_upload(
             profile_json=profile,
             n_rows=int(len(group_df)),
             n_features=int(group_df.shape[1]),
+            label_column=body.label_column if body.label_column in group_df.columns else None,
         )
         db.add(dataset)
         db.commit()
