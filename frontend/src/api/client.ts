@@ -1,4 +1,26 @@
 import axios, { AxiosRequestConfig } from "axios";
+import type { components } from "@/types/api.generated";
+import type {
+  AnalyzeResult,
+  Anomaly,
+  CommitBody,
+  CommitResult,
+  Dataset,
+  DataReviewCandidate,
+  EvaluationSummary,
+  ExperimentResult,
+  ModelInfo,
+  PredictResult,
+  PresetDemoResult,
+  Profile,
+  RetrainReviewRequired,
+  Subject,
+  SubjectDetail,
+  SubjectModel,
+  ThresholdResource,
+} from "./types";
+
+export * from "./types";
 
 const api = axios.create({
   baseURL: "/api",
@@ -33,8 +55,7 @@ api.interceptors.response.use(
 
     const config = err.config as RetryableConfig | undefined;
     const status = err.response?.status;
-    // Only retry idempotent GETs on server errors -- retrying POST/PATCH
-    // (upload, train, label) on a 5xx risks duplicate side effects.
+    // Only idempotent GETs: retrying a POST/PATCH on 5xx risks duplicate side effects.
     const isServerError = typeof status === "number" && status >= 500;
     const isGet = (config?.method ?? "get").toLowerCase() === "get";
     if (config && isServerError && isGet) {
@@ -54,10 +75,26 @@ export function errorMessage(
   err: unknown,
   fallback?: string,
 ): string | undefined {
-  if (axios.isAxiosError<{ detail?: string }>(err)) {
-    return err.response?.data?.detail ?? fallback;
+  if (axios.isAxiosError<{ detail?: string | RetrainReviewRequired }>(err)) {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && "message" in detail) return detail.message;
+    return fallback;
   }
   return fallback;
+}
+
+// Pulls the structured detail out of a blocked /retrain (422) response.
+export function reviewRequired(err: unknown): RetrainReviewRequired | undefined {
+  if (
+    axios.isAxiosError<{ detail?: string | RetrainReviewRequired }>(err) &&
+    err.response?.status === 422 &&
+    err.response?.data?.detail &&
+    typeof err.response.data.detail === "object"
+  ) {
+    return err.response.data.detail as RetrainReviewRequired;
+  }
+  return undefined;
 }
 
 export function isCancelled(err: unknown): boolean {
@@ -66,201 +103,15 @@ export function isCancelled(err: unknown): boolean {
 
 type RequestOpts = { signal?: AbortSignal };
 
-export type Profile = {
-  n_rows: number;
-  n_features: number;
-  autocorr_lag1?: number | null;
-  adf_pvalue?: number | null;
-  fft_peak?: number | null;
-  column_stats?: Record<
-    string,
-    { mean: number; std: number; min: number; max: number }
-  >;
-  error?: string;
-};
-
-export type Dataset = {
-  id: number;
-  name: string;
-  n_rows: number;
-  n_features: number;
-  uploaded_at: string;
-};
-
-export type Threshold = {
-  mu: number;
-  sigma: number;
-  epsilon: number;
-  z_multiplier: number;
-};
-
-export type ModelMetrics = {
-  error?: string;
-  val_score_min?: number;
-  val_score_max?: number;
-  val_score_mean?: number;
-  n_train_samples?: number;
-  n_val_samples?: number;
-};
-
-export type ModelInfo = {
-  id: number;
-  dataset_id: number;
-  subject_id: number;
-  algorithm: "IF" | "LSTM";
-  status: "pending" | "training" | "ready" | "failed";
-  selection_reason: string | null;
-  selection_mode: "auto" | "manual";
-  is_active: boolean;
-  trained_at: string | null;
-  drift_status: string;
-  metrics: ModelMetrics;
-  threshold: Threshold | null;
-};
-
-export type Anomaly = {
-  id: number;
-  prediction_id: number;
-  model_id: number;
-  subject_id: number;
-  window_idx: number;
-  score: number;
-  severity: string;
-  label: string;
-  note: string | null;
-  created_at: string;
-};
-
-export type PredictResult = {
-  batch_id: string;
-  model_id: number;
-  algorithm: string;
-  threshold: number;
-  total_windows: number;
-  anomaly_count: number;
-  anomaly_rate: number;
-  results: {
-    batch_id: string;
-    window_idx: number;
-    score: number;
-    is_anomaly: boolean;
-  }[];
-};
-
-export type SplitOptions = {
-  n_rows: number;
-  candidate_id_columns: { column: string; n_unique: number; example_values: string[] }[];
-  candidate_time_columns: { column: string; sample_range: [string, string] }[];
-};
-
-export type AnalyzeResult = {
-  temp_id: string;
-  n_rows: number;
-  n_features: number;
-  columns: string[];
-  split_options: SplitOptions;
-  profile: Profile;
-};
-
-export type SplitPeriod = "hourly" | "daily" | "weekly" | "monthly";
-
-export type SplitConfig =
-  | { mode: "none" }
-  | { mode: "by_column"; column: string }
-  | { mode: "by_time"; column: string; period: SplitPeriod };
-
-export type CommitBody = {
-  temp_id: string;
-  target: "new" | "existing";
-  subject_name?: string;
-  subject_description?: string;
-  subject_id?: number;
-  split: SplitConfig;
-  algorithm?: "IF" | "LSTM";
-};
-
-export type CommitResult = {
-  subject_ids: number[];
-  dataset_ids: number[];
-  training_queued: boolean;
-};
-
-export type Subject = {
-  id: number;
-  name: string;
-  description: string | null;
-  source_hint: string | null;
-  is_default: boolean;
-  created_at: string;
-  n_datasets: number;
-  n_models: number;
-  n_anomalies: number;
-  active_epsilon: number | null;
-  active_algorithm: string | null;
-  active_model_id: number | null;
-  active_mu: number | null;
-  active_sigma: number | null;
-  active_z_multiplier: number | null;
-};
-
-export type SubjectDataset = {
-  id: number;
-  name: string;
-  n_rows: number | null;
-  n_features: number | null;
-  uploaded_at: string;
-};
-
-export type SubjectModel = {
-  id: number;
-  algorithm: string;
-  selection_reason: string | null;
-  selection_mode: "auto" | "manual";
-  status: string;
-  is_active: boolean;
-  trained_at: string | null;
-  threshold: Threshold | null;
-};
-
-export type SubjectDetail = Subject & {
-  datasets: SubjectDataset[];
-  models: SubjectModel[];
-};
-
-export type ExperimentStatistics = {
-  mean: number;
-  std: number;
-  min: number;
-  max: number;
-  range_ratio: number | null;
-};
-
-export type CrossApplication = {
-  global_epsilon: number;
-  fp_rate_at_global: Record<string, number | null>;
-  miss_rate_at_global: Record<string, number | null>;
-};
-
-export type ExperimentResult = {
-  subject_ids: number[];
-  epsilons: Record<string, number>;
-  statistics: ExperimentStatistics;
-  cross_application: CrossApplication;
-};
-
-export type PresetDemoResult = ExperimentResult & {
-  created_subject_ids: number[];
-};
-
 export const auth = {
   register: (email: string, password: string) =>
     api.post("/auth/register", { email, password }),
   login: (email: string, password: string) =>
-    api.post<{ access_token: string; token_type: string }>("/auth/login", {
+    api.post<components["schemas"]["TokenOut"]>("/auth/login", {
       email,
       password,
     }),
-  me: () => api.get<{ id: number; email: string }>("/auth/me"),
+  me: () => api.get<components["schemas"]["UserOut"]>("/auth/me"),
 };
 
 export const datasets = {
@@ -292,25 +143,38 @@ export const subjects = {
     api.post<Subject>("/subjects", { name, description }),
   detail: (id: number, opts?: RequestOpts) =>
     api.get<SubjectDetail>(`/subjects/${id}`, { signal: opts?.signal }),
-  update: (id: number, data: { name?: string; description?: string }) =>
+  update: (id: number, data: components["schemas"]["SubjectUpdate"]) =>
     api.patch<Subject>(`/subjects/${id}`, data),
   delete: (id: number) => api.delete(`/subjects/${id}`),
-  retrain: (id: number) =>
-    api.post<{ model_id: number; old_epsilon: number | null; new_epsilon: number; delta_pct: number | null }>(
+  retrain: (id: number, force = false) =>
+    api.post<components["schemas"]["RetrainOut"]>(
       `/subjects/${id}/retrain`,
+      undefined,
+      { params: force ? { force: true } : undefined },
     ),
   trainAlternative: (id: number, algorithm: "IF" | "LSTM") =>
-    api.post<{ model_id: number; algorithm: string; epsilon: number }>(`/subjects/${id}/train-alternative`, {
+    api.post<components["schemas"]["TrainAlternativeOut"]>(`/subjects/${id}/train-alternative`, {
       algorithm,
     }),
   activateModel: (subjectId: number, modelId: number) =>
     api.post<SubjectModel>(`/subjects/${subjectId}/models/${modelId}/activate`),
 };
 
+export const dataReview = {
+  precheck: (subjectId: number) =>
+    api.post<DataReviewCandidate[]>(`/subjects/${subjectId}/data-review/precheck`),
+  list: (subjectId: number, opts?: RequestOpts) =>
+    api.get<DataReviewCandidate[]>(`/subjects/${subjectId}/data-review/candidates`, { signal: opts?.signal }),
+  label: (subjectId: number, candidateId: number, label: "confirmed" | "false_positive" | "unlabeled") =>
+    api.patch<DataReviewCandidate>(`/subjects/${subjectId}/data-review/candidates/${candidateId}`, { label }),
+};
+
 export const experiments = {
   run: (subjectIds: number[]) =>
     api.post<ExperimentResult>("/experiments/personalization", { subject_ids: subjectIds }),
   presetDemo: () => api.post<PresetDemoResult>("/experiments/preset-demo"),
+  evaluationSummary: (opts?: RequestOpts) =>
+    api.get<EvaluationSummary>("/experiments/evaluation-summary", { signal: opts?.signal }),
 };
 
 export const models = {
@@ -340,11 +204,11 @@ export const anomalies = {
 
 export const thresholds = {
   get: (modelId: number) =>
-    api.get<Threshold & { calibrated_at: string }>(
+    api.get<ThresholdResource>(
       `/settings/threshold/${modelId}`,
     ),
   update: (modelId: number, z: number) =>
-    api.patch<Threshold & { calibrated_at: string }>(
+    api.patch<ThresholdResource>(
       `/settings/threshold/${modelId}`,
       {
         z_multiplier: z,
