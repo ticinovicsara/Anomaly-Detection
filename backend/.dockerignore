@@ -1,0 +1,17 @@
+.venv/
+.venv-linux/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+.pytest_cache/
+.env
+.env.local
+models_storage/
+*.pkl
+*.joblib
+*.keras
+*.h5
+tests/
+.git/

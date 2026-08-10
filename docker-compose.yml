@@ -16,5 +16,46 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build: ./backend
+    container_name: anomaly_backend
+    environment:
+      # Talks to the "db" service directly on the compose network -- not
+      # the host-mapped 5433 above, that's only for connecting from your
+      # host machine (psql, a GUI client, etc).
+      DATABASE_URL: postgresql://anomaly:anomaly_dev@db:5432/anomaly_db
+      # Override in a repo-root .env before running this anywhere other
+      # than a local/throwaway demo -- the app logs a warning at startup
+      # if this is left at the default.
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
+    ports:
+      # Host port is overridable -- Windows sometimes reserves 8000 in its
+      # excluded port range (same issue frontend/vite.config.ts already
+      # works around for local dev). Set BACKEND_HOST_PORT in a repo-root
+      # .env if 8000 isn't free on your machine.
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    volumes:
+      - models_storage:/app/models_storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    container_name: anomaly_frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  models_storage:
