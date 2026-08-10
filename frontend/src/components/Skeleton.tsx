@@ -1,4 +1,4 @@
-import { cn } from "../lib/cn";
+import { cn } from "@/lib/cn";
 import { Card } from "./Card";
 
 export function Skeleton({ className }: { className?: string }) {

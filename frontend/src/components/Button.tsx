@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Loader2 } from "lucide-react";
-import { cn } from "../lib/cn";
+import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
@@ -42,9 +42,7 @@ export function Button({
   const isDisabled = disabled || loading;
   return (
     <motion.button
-      // framer-motion's event typings conflict with a few native handlers
-      // (onDrag*, onAnimationStart/End) that this app never passes through
-      // Button -- safe to widen at the spread boundary.
+      // framer-motion's event types conflict with a few native handlers this app never passes
       {...(rest as Omit<typeof rest, "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart">)}
       disabled={isDisabled}
       whileTap={isDisabled || reduceMotion ? undefined : { scale: 0.96 }}

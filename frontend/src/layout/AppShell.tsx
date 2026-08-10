@@ -16,9 +16,9 @@ import {
   Moon,
   LogOut,
 } from "lucide-react";
-import { cn } from "../lib/cn";
-import { useTheme } from "../theme/ThemeProvider";
-import { logout, useAuth } from "../hooks/useAuth";
+import { cn } from "@/lib/cn";
+import { useTheme } from "@/theme/ThemeProvider";
+import { logout, useAuth } from "@/hooks";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },

@@ -1,6 +1,6 @@
 import { HTMLAttributes, ReactNode } from "react";
-import { cn } from "../lib/cn";
-import { useCountUp } from "../hooks/useCountUp";
+import { cn } from "@/lib/cn";
+import { useCountUp } from "@/hooks";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
-import { auth } from "../api/client";
+import { auth } from "@/api/client";
 
 type User = { id: number; email: string };
 type Ctx = {
