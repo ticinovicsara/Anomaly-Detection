@@ -42,3 +42,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+
+# Transient intermediate for `npm run generate:types` (backend/scripts/
+# export_openapi.py writes this; only the generated .ts file is committed)
+frontend/openapi.json
