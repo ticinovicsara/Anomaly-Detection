@@ -1,44 +1,32 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, FlaskConical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { Badge, statusTone } from "@/components/Badge";
+import { EmptyState } from "@/components/EmptyState";
+import { EvaluationStats } from "@/components/EvaluationStats";
+import { Input } from "@/components/Input";
+import { Modal } from "@/components/Modal";
+import { Slider } from "@/components/Slider";
+import { TableRowsSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { useAdvancedMode } from "@/hooks";
 import {
-  ArrowLeft,
-  ChevronDown,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { Badge, statusTone } from "../components/Badge";
-import { EmptyState } from "../components/EmptyState";
-import { Input } from "../components/Input";
-import { Modal } from "../components/Modal";
-import { Slider } from "../components/Slider";
-import { TableRowsSkeleton } from "../components/Skeleton";
-import { useToast } from "../components/Toast";
-import { useAdvancedMode } from "../hooks/useAdvancedMode";
-import {
+  dataReview as dataReviewApi,
   errorMessage,
   isCancelled,
+  reviewRequired,
   subjects as subjectsApi,
   thresholds,
+  DataReviewCandidate,
   SubjectDetail as SubjectDetailType,
-  SubjectModel,
-} from "../api/client";
+} from "@/api/client";
+import { AdvancedModelsPanel } from "./AdvancedModelsPanel";
+import { PendingReviewCard } from "./PendingReviewCard";
+import { timeAgo } from "./helpers";
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-export default function SubjectDetail() {
+export default function SubjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const subjectId = Number(id);
   const nav = useNavigate();
@@ -59,6 +47,10 @@ export default function SubjectDetail() {
   const [retraining, setRetraining] = useState(false);
   const [zValue, setZValue] = useState(3);
   const [savingThreshold, setSavingThreshold] = useState(false);
+
+  const [savingReviewToggle, setSavingReviewToggle] = useState(false);
+  const [pendingCandidates, setPendingCandidates] = useState<DataReviewCandidate[] | null>(null);
+  const [labelingCandidateId, setLabelingCandidateId] = useState<number | null>(null);
 
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [trainingAlt, setTrainingAlt] = useState<"IF" | "LSTM" | null>(null);
@@ -148,10 +140,11 @@ export default function SubjectDetail() {
     }
   };
 
-  const retrain = async () => {
+  const retrain = async (force = false) => {
     setRetraining(true);
     try {
-      const r = await subjectsApi.retrain(subject.id);
+      const r = await subjectsApi.retrain(subject.id, force);
+      setPendingCandidates(null);
       const delta = r.data.delta_pct;
       toast({
         tone: "success",
@@ -163,9 +156,43 @@ export default function SubjectDetail() {
       });
       await refresh();
     } catch (err) {
-      toast({ tone: "error", title: "Retrain failed", message: errorMessage(err) });
+      const blocked = reviewRequired(err);
+      if (blocked) {
+        setPendingCandidates(blocked.pending_candidates);
+        toast({ tone: "warning", title: "Review needed before retraining", message: blocked.message });
+      } else {
+        toast({ tone: "error", title: "Retrain failed", message: errorMessage(err) });
+      }
     } finally {
       setRetraining(false);
+    }
+  };
+
+  const togglePreRetrainCheck = async () => {
+    if (!subject) return;
+    setSavingReviewToggle(true);
+    try {
+      await subjectsApi.update(subject.id, { pre_retrain_check_enabled: !subject.pre_retrain_check_enabled });
+      await refresh();
+    } catch (err) {
+      toast({ tone: "error", title: "Could not update setting", message: errorMessage(err) });
+    } finally {
+      setSavingReviewToggle(false);
+    }
+  };
+
+  const labelCandidate = async (candidateId: number, label: "confirmed" | "false_positive") => {
+    if (!subject || !pendingCandidates) return;
+    setLabelingCandidateId(candidateId);
+    const previous = pendingCandidates;
+    setPendingCandidates(pendingCandidates.map((c) => (c.id === candidateId ? { ...c, label } : c)));
+    try {
+      await dataReviewApi.label(subject.id, candidateId, label);
+    } catch (err) {
+      setPendingCandidates(previous);
+      toast({ tone: "error", title: "Could not update", message: errorMessage(err) });
+    } finally {
+      setLabelingCandidateId(null);
     }
   };
 
@@ -196,11 +223,11 @@ export default function SubjectDetail() {
     }
   };
 
-  const activateModel = async (model: SubjectModel) => {
-    setActivatingModelId(model.id);
+  const activateModel = async (modelId: number) => {
+    setActivatingModelId(modelId);
     try {
-      await subjectsApi.activateModel(subject.id, model.id);
-      toast({ tone: "success", title: `Model #${model.id} is now active` });
+      await subjectsApi.activateModel(subject.id, modelId);
+      toast({ tone: "success", title: `Model #${modelId} is now active` });
       await refresh();
     } catch (err) {
       toast({ tone: "error", title: "Could not activate model", message: errorMessage(err) });
@@ -210,7 +237,6 @@ export default function SubjectDetail() {
   };
 
   const previewEpsilon = activeModel?.threshold ? activeModel.threshold.mu + zValue * activeModel.threshold.sigma : null;
-  const otherModels = subject.models.filter((m) => !m.is_active);
 
   return (
     <div className="space-y-6">
@@ -306,90 +332,69 @@ export default function SubjectDetail() {
               </p>
             )}
             <div className="mt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Evaluation on held-out test set
+                </p>
+                {advancedMode && activeModel.evaluation && (
+                  <Link
+                    to={`/models/${activeModel.id}/diagnostics`}
+                    className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                  >
+                    <FlaskConical className="h-3 w-3" /> Full diagnostics
+                  </Link>
+                )}
+              </div>
+              <div className="mt-2">
+                <EvaluationStats evaluation={activeModel.evaluation} />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-4 flex-wrap">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={retrain}
+                onClick={() => retrain()}
                 loading={retraining}
                 disabled={subject.datasets.length === 0}
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
               >
                 Retrain with latest data
               </Button>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted" title="Optional -- flags a handful of suspicious rows in the newest data for you to glance at before they're baked into the model. Off by default, and you can always skip it.">
+                <input
+                  type="checkbox"
+                  className="accent-accent"
+                  checked={subject.pre_retrain_check_enabled}
+                  disabled={savingReviewToggle}
+                  onChange={togglePreRetrainCheck}
+                />
+                Review new data before retraining
+              </label>
             </div>
+
+            {pendingCandidates && pendingCandidates.length > 0 && (
+              <PendingReviewCard
+                candidates={pendingCandidates}
+                labelingCandidateId={labelingCandidateId}
+                retraining={retraining}
+                onLabel={labelCandidate}
+                onRetrain={() => retrain()}
+                onRetrainForce={() => retrain(true)}
+              />
+            )}
           </>
         )}
 
         {advancedMode && (
-          <div className="mt-5 border-t border-border pt-4">
-            <button
-              onClick={() => setAdvancedExpanded((v) => !v)}
-              className="flex w-full items-center justify-between text-left text-xs font-semibold uppercase tracking-wider text-muted hover:text-text"
-            >
-              Advanced
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${advancedExpanded ? "rotate-180" : ""}`} />
-            </button>
-            <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${advancedExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-              <div className="overflow-hidden">
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <p className="text-sm font-medium text-text">Alternative algorithms</p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      Train a different algorithm for comparison. This is useful for research and doesn&apos;t replace your active model.
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => trainAlternative("IF")}
-                        loading={trainingAlt === "IF"}
-                        disabled={subject.datasets.length === 0 || trainingAlt !== null}
-                        icon={<Sparkles className="h-3.5 w-3.5" />}
-                      >
-                        Train Isolation Forest
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => trainAlternative("LSTM")}
-                        loading={trainingAlt === "LSTM"}
-                        disabled={subject.datasets.length === 0 || trainingAlt !== null}
-                        icon={<Sparkles className="h-3.5 w-3.5" />}
-                      >
-                        Train LSTM Autoencoder
-                      </Button>
-                    </div>
-                  </div>
-
-                  {subject.models.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-text">Models trained on this subject ({subject.models.length})</p>
-                      <ul className="mt-2 divide-y divide-border">
-                        {subject.models.map((m) => (
-                          <li key={m.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className={`h-1.5 w-1.5 rounded-full ${m.is_active ? "bg-success" : "bg-border"}`} />
-                              <span className="text-text">Model #{m.id}</span>
-                              <Badge tone="accent">{m.algorithm}</Badge>
-                              <Badge tone={statusTone(m.status)}>{m.status}</Badge>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-muted">{m.threshold ? `ε=${m.threshold.epsilon.toFixed(4)}` : "-"}</span>
-                              {!m.is_active && m.status === "ready" && (
-                                <Button variant="ghost" size="sm" onClick={() => activateModel(m)} loading={activatingModelId === m.id}>
-                                  Make active
-                                </Button>
-                              )}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <AdvancedModelsPanel
+            subject={subject}
+            expanded={advancedExpanded}
+            onToggleExpanded={() => setAdvancedExpanded((v) => !v)}
+            trainingAlt={trainingAlt}
+            onTrainAlternative={trainAlternative}
+            activatingModelId={activatingModelId}
+            onActivateModel={activateModel}
+          />
         )}
       </Card>
 
