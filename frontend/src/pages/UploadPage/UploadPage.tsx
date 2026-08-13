@@ -1,11 +1,12 @@
 import { DragEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UploadCloud, FileText } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { Input } from "../components/Input";
-import { useToast } from "../components/Toast";
-import { useAdvancedMode } from "../hooks/useAdvancedMode";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { Input } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { useToast } from "@/components/Toast";
+import { useAdvancedMode } from "@/hooks";
 import {
   datasets,
   errorMessage,
@@ -13,29 +14,18 @@ import {
   AnalyzeResult,
   Subject,
   SplitPeriod,
-} from "../api/client";
+} from "@/api/client";
+import { ProfileRow } from "./ProfileRow";
+import {
+  AlgorithmChoice,
+  PERIODS,
+  SplitMode,
+  SubjectTarget,
+  estimateTimeGroups,
+  fmt,
+} from "./helpers";
 
-type SubjectTarget = "new" | "existing";
-type SplitMode = "none" | "by_column" | "by_time";
-
-const PERIODS: SplitPeriod[] = ["hourly", "daily", "weekly", "monthly"];
-const PERIOD_MS: Record<SplitPeriod, number> = {
-  hourly: 3_600_000,
-  daily: 86_400_000,
-  weekly: 7 * 86_400_000,
-  monthly: 30 * 86_400_000,
-};
-
-function estimateTimeGroups(sampleRange: [string, string], period: SplitPeriod): number | null {
-  const start = new Date(sampleRange[0]).getTime();
-  const end = new Date(sampleRange[1]).getTime();
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
-  return Math.max(1, Math.ceil((end - start) / PERIOD_MS[period]) + 1);
-}
-
-type AlgorithmChoice = "auto" | "IF" | "LSTM";
-
-export default function Upload() {
+export default function UploadPage() {
   const { enabled: advancedMode } = useAdvancedMode();
 
   const [dragging, setDragging] = useState(false);
@@ -47,11 +37,16 @@ export default function Upload() {
   const [target, setTarget] = useState<SubjectTarget>("new");
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [existingSubjectId, setExistingSubjectId] = useState<number | null>(null);
+  const [existingSubjectId, setExistingSubjectId] = useState<number | null>(
+    null,
+  );
 
   const [splitMode, setSplitMode] = useState<SplitMode>("none");
   const [splitColumn, setSplitColumn] = useState("");
   const [splitPeriod, setSplitPeriod] = useState<SplitPeriod>("daily");
+
+  const [useLabelColumn, setUseLabelColumn] = useState(false);
+  const [labelColumn, setLabelColumn] = useState("");
 
   const [committing, setCommitting] = useState(false);
 
@@ -63,10 +58,7 @@ export default function Upload() {
     subjectsApi
       .list({ signal: controller.signal })
       .then((r) => setExistingSubjects(r.data))
-      .catch(() => {
-        // Non-critical: the "add to existing subject" option just won't
-        // have anything to offer if this fails.
-      });
+      .catch(() => {});
     return () => controller.abort();
   }, []);
 
@@ -87,13 +79,19 @@ export default function Upload() {
       setSplitMode("none");
       setSplitColumn("");
       setAlgorithm("auto");
+      setUseLabelColumn(false);
+      setLabelColumn("");
       toast({
         tone: "success",
         title: "File analyzed",
         message: `${r.data.n_rows.toLocaleString()} rows, ${r.data.n_features} columns`,
       });
     } catch (err) {
-      toast({ tone: "error", title: "Analysis failed", message: errorMessage(err, "Try again") });
+      toast({
+        tone: "error",
+        title: "Analysis failed",
+        message: errorMessage(err, "Try again"),
+      });
     } finally {
       setAnalyzing(false);
     }
@@ -109,13 +107,12 @@ export default function Upload() {
   const setSplit = (mode: SplitMode) => {
     setSplitMode(mode);
     setSplitColumn("");
-    // Splitting always creates new subjects -- an "existing" target
-    // wouldn't make sense once N new subjects are about to be created.
-    if (mode !== "none" && target === "existing") setTarget("new");
+    if (mode !== "none" && target === "existing") setTarget("new"); // splitting always creates new subjects
   };
 
   const idColumns = analysis?.split_options.candidate_id_columns ?? [];
   const timeColumns = analysis?.split_options.candidate_time_columns ?? [];
+  const labelColumns = analysis?.split_options.candidate_label_columns ?? [];
   const selectedIdColumn = idColumns.find((c) => c.column === splitColumn);
   const selectedTimeColumn = timeColumns.find((c) => c.column === splitColumn);
 
@@ -124,7 +121,10 @@ export default function Upload() {
       ? `Will create ${selectedIdColumn.n_unique} subjects`
       : splitMode === "by_time" && selectedTimeColumn
         ? (() => {
-            const n = estimateTimeGroups(selectedTimeColumn.sample_range, splitPeriod);
+            const n = estimateTimeGroups(
+              selectedTimeColumn.sample_range,
+              splitPeriod,
+            );
             return n ? `Will create ~${n} subjects` : null;
           })()
         : null;
@@ -132,7 +132,9 @@ export default function Upload() {
   const canCommit =
     !!analysis &&
     !committing &&
-    (target === "new" ? newName.trim().length > 0 : existingSubjectId !== null) &&
+    (target === "new"
+      ? newName.trim().length > 0
+      : existingSubjectId !== null) &&
     (splitMode === "none" || !!splitColumn);
 
   const commit = async () => {
@@ -144,25 +146,39 @@ export default function Upload() {
           ? ({ mode: "none" } as const)
           : splitMode === "by_column"
             ? ({ mode: "by_column", column: splitColumn } as const)
-            : ({ mode: "by_time", column: splitColumn, period: splitPeriod } as const);
+            : ({
+                mode: "by_time",
+                column: splitColumn,
+                period: splitPeriod,
+              } as const);
 
       const r = await datasets.commit({
         temp_id: analysis.temp_id,
         target,
         subject_name: target === "new" ? newName.trim() : undefined,
-        subject_description: target === "new" ? newDescription.trim() || undefined : undefined,
-        subject_id: target === "existing" ? existingSubjectId ?? undefined : undefined,
+        subject_description:
+          target === "new" ? newDescription.trim() || undefined : undefined,
+        subject_id:
+          target === "existing" ? (existingSubjectId ?? undefined) : undefined,
         split,
         algorithm: advancedMode && algorithm !== "auto" ? algorithm : undefined,
+        label_column: useLabelColumn && labelColumn ? labelColumn : undefined,
       });
       const n = r.data.subject_ids.length;
       toast({
         tone: "info",
-        title: n === 1 ? "Subject ready, training in progress" : `Created ${n} subjects, training in progress`,
+        title:
+          n === 1
+            ? "Subject ready, training in progress"
+            : `Created ${n} subjects, training in progress`,
       });
       nav("/subjects");
     } catch (err) {
-      toast({ tone: "error", title: "Could not save", message: errorMessage(err) });
+      toast({
+        tone: "error",
+        title: "Could not save",
+        message: errorMessage(err),
+      });
     } finally {
       setCommitting(false);
     }
@@ -170,12 +186,10 @@ export default function Upload() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Upload data</h1>
-        <p className="mt-1 text-sm text-muted">
-          Drop a CSV, and we&apos;ll analyze it and help you organize it into subjects.
-        </p>
-      </div>
+      <PageHeader
+        title="Upload data"
+        subtitle="Drop a CSV, and we'll analyze it and help you organize it into subjects."
+      />
 
       {/* Dropzone */}
       <Card className="p-0 overflow-hidden">
@@ -187,21 +201,29 @@ export default function Upload() {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           className={`flex cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed p-12 transition-colors duration-150 ease-out ${
-            dragging ? "border-accent bg-accent/5" : "border-border hover:border-accent/60 hover:bg-surface-2/50"
+            dragging
+              ? "border-accent bg-accent/5"
+              : "border-border hover:border-accent/60 hover:bg-surface-2/50"
           }`}
         >
           <div className="rounded-2xl bg-accent/10 p-4 text-accent">
             <UploadCloud className="h-8 w-8" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-text">{analyzing ? "Analyzing…" : "Drop your CSV here"}</p>
-            <p className="mt-1 text-xs text-muted">or click to browse, up to 50 MB</p>
+            <p className="text-sm font-medium text-text">
+              {analyzing ? "Analyzing…" : "Drop your CSV here"}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              or click to browse, up to 50 MB
+            </p>
           </div>
           <input
             type="file"
             accept=".csv"
             className="hidden"
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+            onChange={(e) =>
+              e.target.files?.[0] && handleFile(e.target.files[0])
+            }
           />
         </label>
       </Card>
@@ -224,9 +246,12 @@ export default function Upload() {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-text">Data profile</p>
+                    <p className="text-sm font-medium text-text">
+                      Data profile
+                    </p>
                     <p className="text-xs text-muted">
-                      {analysis.n_rows.toLocaleString()} rows · {analysis.n_features} columns
+                      {analysis.n_rows.toLocaleString()} rows ·{" "}
+                      {analysis.n_features} columns
                     </p>
                   </div>
                 </div>
@@ -246,13 +271,18 @@ export default function Upload() {
                     value={fmt(analysis.profile.fft_peak, 4)}
                     hint="periodic patterns"
                   />
-                  <ProfileRow label="Numeric features" value={String(analysis.profile.n_features)} />
+                  <ProfileRow
+                    label="Numeric features"
+                    value={String(analysis.profile.n_features)}
+                  />
                 </div>
               </Card>
 
               {/* Where does this data belong? */}
               <Card>
-                <p className="text-sm font-semibold text-text">Where does this data belong?</p>
+                <p className="text-sm font-semibold text-text">
+                  Where does this data belong?
+                </p>
                 <div className="mt-4 space-y-3">
                   <label className="flex cursor-pointer items-start gap-3">
                     <input
@@ -263,7 +293,9 @@ export default function Upload() {
                       onChange={() => setTarget("new")}
                     />
                     <div className="flex-1">
-                      <span className="text-sm text-text">Create new subject</span>
+                      <span className="text-sm text-text">
+                        Create new subject
+                      </span>
                       {target === "new" && (
                         <div className="mt-2 space-y-2">
                           <Input
@@ -283,25 +315,37 @@ export default function Upload() {
 
                   <label
                     className={`flex items-start gap-3 ${
-                      existingSubjects.length === 0 || splitMode !== "none" ? "opacity-50" : "cursor-pointer"
+                      existingSubjects.length === 0 || splitMode !== "none"
+                        ? "opacity-50"
+                        : "cursor-pointer"
                     }`}
-                    title={splitMode !== "none" ? "Splitting always creates new subjects" : undefined}
+                    title={
+                      splitMode !== "none"
+                        ? "Splitting always creates new subjects"
+                        : undefined
+                    }
                   >
                     <input
                       type="radio"
                       name="target"
                       className="mt-1 accent-accent"
                       checked={target === "existing"}
-                      disabled={existingSubjects.length === 0 || splitMode !== "none"}
+                      disabled={
+                        existingSubjects.length === 0 || splitMode !== "none"
+                      }
                       onChange={() => setTarget("existing")}
                     />
                     <div className="flex-1">
-                      <span className="text-sm text-text">Add to existing subject</span>
+                      <span className="text-sm text-text">
+                        Add to existing subject
+                      </span>
                       {target === "existing" && (
                         <select
                           className="mt-2 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
                           value={existingSubjectId ?? ""}
-                          onChange={(e) => setExistingSubjectId(Number(e.target.value))}
+                          onChange={(e) =>
+                            setExistingSubjectId(Number(e.target.value))
+                          }
                         >
                           <option value="" disabled>
                             Select a subject…
@@ -320,7 +364,9 @@ export default function Upload() {
 
               {/* How to organize this data? */}
               <Card>
-                <p className="text-sm font-semibold text-text">How should this data be organized?</p>
+                <p className="text-sm font-semibold text-text">
+                  How should this data be organized?
+                </p>
                 <div className="mt-4 space-y-3">
                   <label className="flex cursor-pointer items-center gap-3">
                     <input
@@ -330,7 +376,9 @@ export default function Upload() {
                       checked={splitMode === "none"}
                       onChange={() => setSplit("none")}
                     />
-                    <span className="text-sm text-text">Treat as one subject (default)</span>
+                    <span className="text-sm text-text">
+                      Treat as one subject (default)
+                    </span>
                   </label>
 
                   <label
@@ -397,7 +445,9 @@ export default function Upload() {
                           <select
                             className="w-32 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
                             value={splitPeriod}
-                            onChange={(e) => setSplitPeriod(e.target.value as SplitPeriod)}
+                            onChange={(e) =>
+                              setSplitPeriod(e.target.value as SplitPeriod)
+                            }
                           >
                             {PERIODS.map((p) => (
                               <option key={p} value={p}>
@@ -410,15 +460,61 @@ export default function Upload() {
                     </div>
                   </label>
                 </div>
-                {splitPreview && <p className="mt-4 text-xs font-medium text-accent">{splitPreview}</p>}
+                {splitPreview && (
+                  <p className="mt-4 text-xs font-medium text-accent">
+                    {splitPreview}
+                  </p>
+                )}
               </Card>
+
+              {labelColumns.length > 0 && (
+                <Card>
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-accent"
+                      checked={useLabelColumn}
+                      onChange={(e) => {
+                        setUseLabelColumn(e.target.checked);
+                        if (e.target.checked && !labelColumn)
+                          setLabelColumn(labelColumns[0].column);
+                      }}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-text">
+                        This column marks known anomalies (optional)
+                      </span>
+                      <p className="mt-1 text-xs text-muted">
+                        If a column already labels which rows are anomalies, the
+                        trained model can be evaluated against it (precision,
+                        recall, F1, AU-ROC) on held-out data. Off by default —
+                        everything works the same without it.
+                      </p>
+                      {useLabelColumn && (
+                        <select
+                          className="mt-2 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+                          value={labelColumn}
+                          onChange={(e) => setLabelColumn(e.target.value)}
+                        >
+                          {labelColumns.map((c) => (
+                            <option key={c.column} value={c.column}>
+                              {c.column} ({c.example_values.join(" / ")})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </label>
+                </Card>
+              )}
 
               {advancedMode && (
                 <Card>
                   <p className="text-sm font-semibold text-text">Algorithm</p>
                   <p className="mt-1 text-xs text-muted">
-                    By default the router picks the best algorithm from your data's profile. Advanced mode lets
-                    you override that for this upload.
+                    By default the router picks the best algorithm from your
+                    data's profile. Advanced mode lets you override that for
+                    this upload.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {(["auto", "IF", "LSTM"] as AlgorithmChoice[]).map((a) => (
@@ -431,14 +527,23 @@ export default function Upload() {
                             : "border-border text-muted hover:text-text"
                         }`}
                       >
-                        {a === "auto" ? "Auto (recommended)" : a === "IF" ? "Isolation Forest" : "LSTM Autoencoder"}
+                        {a === "auto"
+                          ? "Auto (recommended)"
+                          : a === "IF"
+                            ? "Isolation Forest"
+                            : "LSTM Autoencoder"}
                       </button>
                     ))}
                   </div>
                 </Card>
               )}
 
-              <Button onClick={commit} loading={committing} disabled={!canCommit} className="w-full sm:w-auto">
+              <Button
+                onClick={commit}
+                loading={committing}
+                disabled={!canCommit}
+                className="w-full sm:w-auto"
+              >
                 Analyze &amp; train
               </Button>
             </div>
@@ -447,21 +552,4 @@ export default function Upload() {
       </div>
     </div>
   );
-}
-
-function ProfileRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex items-baseline justify-between rounded-lg px-3 py-2 hover:bg-surface-2/50">
-      <div>
-        <p className="text-xs text-muted">{label}</p>
-        {hint && <p className="text-[10px] text-muted/70">{hint}</p>}
-      </div>
-      <span className="font-mono text-sm text-text">{value}</span>
-    </div>
-  );
-}
-
-function fmt(n: number | null | undefined, digits = 3): string {
-  if (n === null || n === undefined) return "-";
-  return n.toFixed(digits);
 }
