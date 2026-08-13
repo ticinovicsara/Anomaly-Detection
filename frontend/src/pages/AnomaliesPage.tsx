@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { Check, X, RotateCcw, Filter, ShieldCheck } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { Badge, severityTone } from "../components/Badge";
-import { EmptyState } from "../components/EmptyState";
-import { TableRowsSkeleton } from "../components/Skeleton";
-import { useToast } from "../components/Toast";
-import { anomalies as api, isCancelled, subjects as subjectsApi, Anomaly, Subject } from "../api/client";
+import {
+  Button,
+  Card,
+  Badge,
+  severityTone,
+  useToast,
+  PageHeader,
+  EmptyState,
+  TableRowsSkeleton,
+} from "@/components";
+import {
+  anomalies as api,
+  isCancelled,
+  subjects as subjectsApi,
+  Anomaly,
+  Subject,
+} from "@/api/client";
 
 const labels = [
   { value: "", label: "All" },
@@ -16,7 +26,7 @@ const labels = [
   { value: "resolved", label: "Resolved" },
 ];
 
-export default function Anomalies() {
+export default function AnomaliesPage() {
   const [items, setItems] = useState<Anomaly[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,9 +39,7 @@ export default function Anomalies() {
     subjectsApi
       .list({ signal: controller.signal })
       .then((r) => setSubjects(r.data))
-      .catch(() => {
-        // Non-critical: the subject filter row just won't have options.
-      });
+      .catch(() => {});
     return () => controller.abort();
   }, []);
 
@@ -40,7 +48,11 @@ export default function Anomalies() {
     setLoading(true);
     api
       .list(
-        { label: labelFilter || undefined, subject_id: subjectFilter ?? undefined, limit: 200 },
+        {
+          label: labelFilter || undefined,
+          subject_id: subjectFilter ?? undefined,
+          limit: 200,
+        },
         { signal: controller.signal },
       )
       .then((r) => setItems(r.data))
@@ -74,12 +86,10 @@ export default function Anomalies() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Anomalies</h1>
-        <p className="mt-1 text-sm text-muted">
-          Review detected anomalies and label them. Your feedback improves calibration.
-        </p>
-      </div>
+      <PageHeader
+        title="Anomalies"
+        subtitle="Review detected anomalies and label them. Your feedback improves calibration."
+      />
 
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -147,7 +157,9 @@ export default function Anomalies() {
         <Card>
           <EmptyState
             icon={ShieldCheck}
-            title={labelFilter ? "No matches for this filter" : "No anomalies yet"}
+            title={
+              labelFilter ? "No matches for this filter" : "No anomalies yet"
+            }
             message={
               labelFilter
                 ? "Try a different label, or clear the filter to see everything."
@@ -173,8 +185,13 @@ export default function Anomalies() {
               </thead>
               <tbody>
                 {items.map((a) => (
-                  <tr key={a.id} className="border-b border-border/50 last:border-0 hover:bg-surface-2/30">
-                    <td className="px-6 py-3 text-xs text-muted">{new Date(a.created_at).toLocaleString()}</td>
+                  <tr
+                    key={a.id}
+                    className="border-b border-border/50 last:border-0 hover:bg-surface-2/30"
+                  >
+                    <td className="px-6 py-3 text-xs text-muted">
+                      {new Date(a.created_at).toLocaleString()}
+                    </td>
                     <td className="px-6 py-3">
                       {subjectById.get(a.subject_id) ? (
                         <Badge>{subjectById.get(a.subject_id)!.name}</Badge>
@@ -182,14 +199,30 @@ export default function Anomalies() {
                         <span className="text-xs text-muted">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-3 font-mono text-xs text-muted">#{a.model_id}</td>
-                    <td className="px-6 py-3 font-mono text-xs">{a.window_idx}</td>
-                    <td className="px-6 py-3 font-mono text-xs">{a.score.toFixed(3)}</td>
-                    <td className="px-6 py-3">
-                      <Badge tone={severityTone(a.severity)}>{a.severity}</Badge>
+                    <td className="px-6 py-3 font-mono text-xs text-muted">
+                      #{a.model_id}
+                    </td>
+                    <td className="px-6 py-3 font-mono text-xs">
+                      {a.window_idx}
+                    </td>
+                    <td className="px-6 py-3 font-mono text-xs">
+                      {a.score.toFixed(3)}
                     </td>
                     <td className="px-6 py-3">
-                      <Badge tone={a.label === "confirmed" ? "success" : a.label === "false_positive" ? "danger" : "default"}>
+                      <Badge tone={severityTone(a.severity)}>
+                        {a.severity}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-3">
+                      <Badge
+                        tone={
+                          a.label === "confirmed"
+                            ? "success"
+                            : a.label === "false_positive"
+                              ? "danger"
+                              : "default"
+                        }
+                      >
                         {a.label.replace("_", " ")}
                       </Badge>
                     </td>
@@ -244,7 +277,12 @@ function SummaryCard({
   value: string | number;
   tone?: "default" | "success" | "warning";
 }) {
-  const cls = tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-text";
+  const cls =
+    tone === "success"
+      ? "text-success"
+      : tone === "warning"
+        ? "text-warning"
+        : "text-text";
   return (
     <Card>
       <p className="text-xs uppercase tracking-wider text-muted">{label}</p>
