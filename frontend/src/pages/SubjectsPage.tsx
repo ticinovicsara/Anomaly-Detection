@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Heart, CreditCard, Server, Circle, Plus, FlaskConical, ArrowRight } from "lucide-react";
 import { LucideIcon } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { EmptyState } from "../components/EmptyState";
-import { Input } from "../components/Input";
-import { Modal } from "../components/Modal";
-import { StaggerGroup, StaggerItem } from "../components/Stagger";
-import { TableRowsSkeleton } from "../components/Skeleton";
-import { useToast } from "../components/Toast";
-import { errorMessage, isCancelled, subjects as subjectsApi, Subject } from "../api/client";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { EmptyState } from "@/components/EmptyState";
+import { Input } from "@/components/Input";
+import { Modal } from "@/components/Modal";
+import { PageHeader } from "@/components/PageHeader";
+import { StaggerGroup, StaggerItem } from "@/components/Stagger";
+import { TableRowsSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
+import { errorMessage, isCancelled, experiments as experimentsApi, subjects as subjectsApi, EvaluationSummary, Subject } from "@/api/client";
 
 type Domain = "biomedical" | "financial" | "infrastructure" | "unknown";
 
@@ -29,8 +30,9 @@ const DOMAIN_ICON: Record<Domain, LucideIcon> = {
   unknown: Circle,
 };
 
-export default function Subjects() {
+export default function SubjectsPage() {
   const [items, setItems] = useState<Subject[]>([]);
+  const [evalSummary, setEvalSummary] = useState<EvaluationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -50,6 +52,11 @@ export default function Subjects() {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+    // Additive summary -- failure here shouldn't block the grid from rendering.
+    experimentsApi
+      .evaluationSummary({ signal: controller.signal })
+      .then((r) => setEvalSummary(r.data))
+      .catch(() => {});
     return () => controller.abort();
   }, []);
 
@@ -71,24 +78,52 @@ export default function Subjects() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Subjects</h1>
-          <p className="mt-1 text-sm text-muted">
-            The entities you track — a patient, a card, a service. Each gets its own personalized threshold.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/experiments">
-            <Button variant="secondary" icon={<FlaskConical className="h-4 w-4" />}>
-              Personalization experiment
+      <PageHeader
+        title="Subjects"
+        subtitle="The entities you track — a patient, a card, a service. Each gets its own personalized threshold."
+        action={
+          <>
+            <Link to="/experiments">
+              <Button variant="secondary" icon={<FlaskConical className="h-4 w-4" />}>
+                Personalization experiment
+              </Button>
+            </Link>
+            <Button onClick={() => setCreateOpen(true)} icon={<Plus className="h-4 w-4" />}>
+              New subject
             </Button>
-          </Link>
-          <Button onClick={() => setCreateOpen(true)} icon={<Plus className="h-4 w-4" />}>
-            New subject
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
+
+      {evalSummary && evalSummary.n_labeled_subjects > 0 && evalSummary.f1_statistics && (
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+            Across your {evalSummary.n_labeled_subjects} labeled subject{evalSummary.n_labeled_subjects === 1 ? "" : "s"}
+          </p>
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <span className="font-mono text-2xl font-semibold text-accent">
+              F1 {(evalSummary.f1_statistics.mean * 100).toFixed(0)}% avg
+            </span>
+            <span className="font-mono text-sm text-muted">
+              range {(evalSummary.f1_statistics.min * 100).toFixed(0)}%–{(evalSummary.f1_statistics.max * 100).toFixed(0)}%
+            </span>
+            {evalSummary.auc_statistics && (
+              <span className="font-mono text-sm text-muted">
+                AU-ROC avg {evalSummary.auc_statistics.mean.toFixed(3)}
+              </span>
+            )}
+            {evalSummary.n_unlabeled_subjects > 0 && (
+              <span className="text-xs text-muted">
+                ({evalSummary.n_unlabeled_subjects} subject{evalSummary.n_unlabeled_subjects === 1 ? "" : "s"} without
+                labeled data, not included)
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            This is a summary only — each subject keeps its own accuracy shown individually below.
+          </p>
+        </Card>
+      )}
 
       {loading ? (
         <Card className="p-0">
@@ -127,9 +162,23 @@ export default function Subjects() {
                       </div>
                     </div>
 
-                    <p className="mt-4 font-mono text-lg font-semibold text-text">
-                      {s.active_epsilon !== null ? `ε = ${s.active_epsilon.toFixed(4)}` : "Not trained yet"}
-                    </p>
+                    <div className="mt-4 flex items-center gap-3 flex-wrap">
+                      <p className="font-mono text-lg font-semibold text-text">
+                        {s.active_epsilon !== null ? `ε = ${s.active_epsilon.toFixed(4)}` : "Not trained yet"}
+                      </p>
+                      {s.active_f1 != null && (
+                        <span
+                          className="rounded-full border border-success/20 bg-success/10 px-2 py-0.5 font-mono text-xs font-medium text-success"
+                          title={
+                            s.active_auc != null
+                              ? `F1 ${(s.active_f1 * 100).toFixed(0)}% · AU-ROC ${s.active_auc.toFixed(3)} on held-out test set`
+                              : `F1 ${(s.active_f1 * 100).toFixed(0)}% on held-out test set`
+                          }
+                        >
+                          F1 {(s.active_f1 * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
 
                     <div className="mt-4 flex items-center gap-4 text-xs text-muted">
                       <span>
