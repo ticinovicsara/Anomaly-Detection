@@ -1,14 +1,14 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Activity, UserPlus } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { Input } from "../components/Input";
-import { useToast } from "../components/Toast";
-import { auth, errorMessage } from "../api/client";
-import { useAuth } from "../hooks/useAuth";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { Input } from "@/components/Input";
+import { useToast } from "@/components/Toast";
+import { auth, errorMessage } from "@/api/client";
+import { useAuth } from "@/hooks";
 
-export default function Register() {
+export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
