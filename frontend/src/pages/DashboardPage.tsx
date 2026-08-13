@@ -11,11 +11,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Button } from "../components/Button";
-import { Card, StatCard } from "../components/Card";
-import { Badge, severityTone, statusTone } from "../components/Badge";
-import { DashboardSkeleton } from "../components/Skeleton";
-import { StaggerGroup, StaggerItem } from "../components/Stagger";
+import { Button } from "@/components/Button";
+import { Card, StatCard } from "@/components/Card";
+import { Badge, severityTone, statusTone } from "@/components/Badge";
+import { PageHeader } from "@/components/PageHeader";
+import { DashboardSkeleton } from "@/components/Skeleton";
+import { StaggerGroup, StaggerItem } from "@/components/Stagger";
 import {
   anomalies as anomaliesApi,
   isCancelled,
@@ -24,9 +25,9 @@ import {
   Anomaly,
   ModelInfo,
   Subject,
-} from "../api/client";
+} from "@/api/client";
 
-export default function Dashboard() {
+export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [recent, setRecent] = useState<Anomaly[]>([]);
@@ -75,18 +76,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted">
-            Overview of your subjects, models, and recently detected anomalies.
-          </p>
-        </div>
-        <Link to="/upload">
-          <Button icon={<UploadIcon className="h-4 w-4" />}>Upload data</Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Overview of your subjects, models, and recently detected anomalies."
+        action={
+          <Link to="/upload">
+            <Button icon={<UploadIcon className="h-4 w-4" />}>Upload data</Button>
+          </Link>
+        }
+      />
 
       {/* Stats */}
       <StaggerGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
