@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { Save, Sliders, Sun, Moon, Wrench } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { EmptyState } from "../components/EmptyState";
-import { Slider } from "../components/Slider";
-import { FullPageSpinner } from "../components/Spinner";
-import { useToast } from "../components/Toast";
-import { useAdvancedMode } from "../hooks/useAdvancedMode";
-import { useTheme } from "../theme/ThemeProvider";
-import { isCancelled, subjects as subjectsApi, thresholds, Subject } from "../api/client";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Slider } from "@/components/Slider";
+import { FullPageSpinner } from "@/components/Spinner";
+import { useToast } from "@/components/Toast";
+import { useAdvancedMode } from "@/hooks";
+import { useTheme } from "@/theme/ThemeProvider";
+import { isCancelled, subjects as subjectsApi, thresholds, Subject } from "@/api/client";
 
-export default function Settings() {
+export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { enabled: advancedMode, toggle: toggleAdvancedMode } = useAdvancedMode();
 
@@ -62,10 +63,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted">Appearance, per-subject threshold controls, and advanced options.</p>
-      </div>
+      <PageHeader title="Settings" subtitle="Appearance, per-subject threshold controls, and advanced options." />
 
       {/* Theme */}
       <Card>
