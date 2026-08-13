@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Brain, ChevronDown, PlayCircle, Upload as UploadIcon } from "lucide-react";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import { Badge, statusTone } from "../components/Badge";
-import { EmptyState } from "../components/EmptyState";
-import { FullPageSpinner } from "../components/Spinner";
-import { useToast } from "../components/Toast";
-import { useAdvancedMode } from "../hooks/useAdvancedMode";
+import { Brain, ChevronDown, FlaskConical, PlayCircle, Upload as UploadIcon } from "lucide-react";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { Badge, statusTone } from "@/components/Badge";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { FullPageSpinner } from "@/components/Spinner";
+import { useToast } from "@/components/Toast";
+import { useAdvancedMode } from "@/hooks";
 import {
   errorMessage,
   isCancelled,
@@ -16,9 +17,9 @@ import {
   ModelInfo,
   PredictResult,
   Subject,
-} from "../api/client";
+} from "@/api/client";
 
-export default function Models() {
+export default function ModelsPage() {
   const { enabled: advancedMode } = useAdvancedMode();
 
   const [items, setItems] = useState<ModelInfo[]>([]);
@@ -119,12 +120,14 @@ export default function Models() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Models</h1>
-        <p className="mt-1 text-sm text-muted">
-          Grouped by subject. Click <b>Predict</b> to run one on new data.
-        </p>
-      </div>
+      <PageHeader
+        title="Models"
+        subtitle={
+          <>
+            Grouped by subject. Click <b>Predict</b> to run one on new data.
+          </>
+        }
+      />
 
       {groups.length === 0 ? (
         <Card>
@@ -189,20 +192,34 @@ export default function Models() {
                             )}
                             {advancedMode && m.selection_mode === "manual" && <Badge>manual</Badge>}
                             {m.threshold && <span className="font-mono text-xs text-muted">ε={m.threshold.epsilon.toFixed(4)}</span>}
+                            {m.metrics.evaluation && (
+                              <span className="font-mono text-xs text-muted" title="F1 on held-out test set">
+                                F1={m.metrics.evaluation.f1.toFixed(3)}
+                              </span>
+                            )}
                           </div>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={m.status !== "ready"}
-                            loading={predicting === m.id}
-                            icon={<PlayCircle className="h-3.5 w-3.5" />}
-                            onClick={() => {
-                              setTargetModel(m.id);
-                              fileInputRef.current?.click();
-                            }}
-                          >
-                            Predict
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {advancedMode && m.metrics.evaluation && (
+                              <Link to={`/models/${m.id}/diagnostics`}>
+                                <Button variant="ghost" size="sm" icon={<FlaskConical className="h-3.5 w-3.5" />}>
+                                  Diagnostics
+                                </Button>
+                              </Link>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={m.status !== "ready"}
+                              loading={predicting === m.id}
+                              icon={<PlayCircle className="h-3.5 w-3.5" />}
+                              onClick={() => {
+                                setTargetModel(m.id);
+                                fileInputRef.current?.click();
+                              }}
+                            >
+                              Predict
+                            </Button>
+                          </div>
                         </li>
                       ))}
                     </ul>
