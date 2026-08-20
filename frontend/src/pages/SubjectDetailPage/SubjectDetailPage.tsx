@@ -4,11 +4,13 @@ import { ArrowLeft, FlaskConical, Pencil, Plus, RotateCcw, Trash2 } from "lucide
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Badge, statusTone } from "@/components/Badge";
+import { Checkbox } from "@/components/Checkbox";
 import { EmptyState } from "@/components/EmptyState";
 import { EvaluationStats } from "@/components/EvaluationStats";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Slider } from "@/components/Slider";
+import { Spinner } from "@/components/Spinner";
 import { TableRowsSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { useAdvancedMode } from "@/hooks";
@@ -64,17 +66,41 @@ export default function SubjectDetailPage() {
     return r.data;
   };
 
+  const isPending = (s: SubjectDetailType) => s.models.some((m) => m.status === "training" || m.status === "pending");
+
   useEffect(() => {
     const controller = new AbortController();
+    let intervalId: number | undefined;
     setLoading(true);
+
+    const poll = () => {
+      fetchDetail(controller.signal)
+        .then((data) => {
+          if (!isPending(data) && intervalId !== undefined) {
+            clearInterval(intervalId);
+            intervalId = undefined;
+          }
+        })
+        .catch((err) => {
+          if (!isCancelled(err)) throw err;
+        });
+    };
+
     fetchDetail(controller.signal)
+      .then((data) => {
+        if (isPending(data)) intervalId = window.setInterval(poll, 3000);
+      })
       .catch((err) => {
         if (!isCancelled(err)) throw err;
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
-    return () => controller.abort();
+
+    return () => {
+      controller.abort();
+      if (intervalId !== undefined) clearInterval(intervalId);
+    };
   }, [subjectId]);
 
   const refresh = () => fetchDetail().catch(() => {});
@@ -262,7 +288,11 @@ export default function SubjectDetailPage() {
       {/* Threshold */}
       <Card>
         <h3 className="text-sm font-semibold text-text">Personalized threshold</h3>
-        {!activeModel || !activeModel.threshold ? (
+        {activeModel?.status === "training" ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+            <Spinner className="h-4 w-4" /> Training in progress — threshold will appear once calibration finishes.
+          </p>
+        ) : !activeModel || !activeModel.threshold ? (
           <p className="mt-3 text-sm text-muted">No trained model yet — upload data or train to calibrate a threshold.</p>
         ) : (
           <>
@@ -320,6 +350,11 @@ export default function SubjectDetailPage() {
           <p className="mt-3 text-sm text-muted">Not trained yet.</p>
         ) : (
           <>
+            {activeModel.status === "training" && (
+              <div className="mt-3 flex items-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
+                <Spinner className="h-4 w-4" /> Training in progress for this Subject — this page updates automatically.
+              </div>
+            )}
             <div className="mt-3 flex items-center gap-2">
               <Badge tone="accent">{activeModel.algorithm}</Badge>
               <Badge tone={statusTone(activeModel.status)}>{activeModel.status}</Badge>
@@ -361,9 +396,7 @@ export default function SubjectDetailPage() {
                 Retrain with latest data
               </Button>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-muted" title="Optional -- flags a handful of suspicious rows in the newest data for you to glance at before they're baked into the model. Off by default, and you can always skip it.">
-                <input
-                  type="checkbox"
-                  className="accent-accent"
+                <Checkbox
                   checked={subject.pre_retrain_check_enabled}
                   disabled={savingReviewToggle}
                   onChange={togglePreRetrainCheck}
