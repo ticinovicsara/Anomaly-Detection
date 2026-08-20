@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, FlaskConical } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Spinner } from "@/components/Spinner";
-import { models as predictApi, PredictBatchDetail, PredictBatchSummary } from "@/api/client";
+import {
+  models as predictApi,
+  PredictBatchDetail,
+  PredictBatchSummary,
+} from "@/api/client";
 import { ConfusionMatrix } from "./ConfusionMatrix";
 import { PredictedVsActualChart } from "./PredictedVsActualChart";
 import { outcomeOf } from "./helpers";
@@ -17,7 +21,13 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function LabeledPredictRuns({ modelId, epsilon }: { modelId: number; epsilon: number | null | undefined }) {
+export function LabeledPredictRuns({
+  modelId,
+  epsilon,
+}: {
+  modelId: number;
+  epsilon: number | null | undefined;
+}) {
   const [batches, setBatches] = useState<PredictBatchSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -63,11 +73,13 @@ export function LabeledPredictRuns({ modelId, epsilon }: { modelId: number; epsi
     <Card className="p-0 overflow-hidden">
       <div className="px-6 py-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text">
-          <FlaskConical className="h-4 w-4 text-accent" /> Labeled test runs from Predict
+          <FlaskConical className="h-4 w-4 text-accent" /> Labeled test runs
+          from Predict
         </h3>
         <p className="mt-1 text-xs text-muted">
-          Every time you run Predict with a CSV that includes a <code>label</code> column, the result appears here
-          - this is separate from the training-time evaluation above.
+          Every time you run Predict with a CSV that includes a{" "}
+          <code>label</code> column, the result appears here - this is separate
+          from the training-time evaluation above.
         </p>
       </div>
       <ul className="divide-y divide-border border-t border-border">
@@ -81,9 +93,15 @@ export function LabeledPredictRuns({ modelId, epsilon }: { modelId: number; epsi
                 className="flex w-full items-center justify-between gap-3 px-6 py-3 text-left hover:bg-surface-2/40"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`} />
-                  <span className="text-sm text-text">{timeAgo(b.created_at)}</span>
-                  <span className="text-xs text-muted">{b.n_windows.toLocaleString()} windows</span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`}
+                  />
+                  <span className="text-sm text-text">
+                    {timeAgo(b.created_at)}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {b.n_windows.toLocaleString()} windows
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs shrink-0">
                   <span className="text-success">{c.tp} correct</span>
@@ -100,10 +118,15 @@ export function LabeledPredictRuns({ modelId, epsilon }: { modelId: number; epsi
                   ) : detail ? (
                     <>
                       <ConfusionMatrix confusion={detail.confusion} />
-                      <PredictedVsActualChart data={chartData} epsilon={epsilon} />
+                      <PredictedVsActualChart
+                        data={chartData}
+                        epsilon={epsilon}
+                      />
                     </>
                   ) : (
-                    <p className="text-sm text-muted">Could not load this run.</p>
+                    <p className="text-sm text-muted">
+                      Could not load this run.
+                    </p>
                   )}
                 </div>
               )}

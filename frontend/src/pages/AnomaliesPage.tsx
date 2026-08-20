@@ -378,6 +378,9 @@ export default function AnomaliesPage() {
                     <span className="text-xs text-muted">
                       {episodes.length} episode{episodes.length === 1 ? "" : "s"} · {total} window
                       {total === 1 ? "" : "s"} total
+                      {subject?.active_epsilon != null && (
+                        <> · threshold ε = {subject.active_epsilon.toFixed(4)}</>
+                      )}
                     </span>
                   </div>
                   <ChevronDown
@@ -422,7 +425,14 @@ export default function AnomaliesPage() {
                                 <td className="px-6 py-3 font-mono text-xs">
                                   {ep.windowMin === ep.windowMax ? ep.windowMin : `${ep.windowMin}–${ep.windowMax}`}
                                 </td>
-                                <td className="px-6 py-3 font-mono text-xs">{ep.peakScore.toFixed(3)}</td>
+                                <td className="px-6 py-3 font-mono text-xs">
+                                  {ep.peakScore.toFixed(3)}
+                                  {subject?.active_epsilon != null && subject.active_epsilon > 0 && (
+                                    <span className="ml-1 text-muted">
+                                      ({(ep.peakScore / subject.active_epsilon).toFixed(1)}×ε)
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="px-6 py-3">
                                   <div className="flex items-center gap-1.5">
                                     <Badge tone={severityTone(ep.worstSeverity)}>{ep.worstSeverity}</Badge>
