@@ -10,15 +10,19 @@ export function CrossApplicationImpact({ result }: Props) {
   const globalEps = result.cross_application.global_epsilon ?? null;
   const entries = Object.entries(result.epsilons);
 
-  const lowGroupFp = average(
+  // A subject with a naturally LOWER ε, forced onto the higher global ε,
+  // under-flags -- its harm shows up as a higher MISS rate, not FP rate.
+  const lowGroupMiss = average(
     entries
       .filter(([, eps]) => eps < (globalEps ?? 0))
-      .map(([name]) => result.cross_application.fp_rate_at_global[name] ?? null),
+      .map(([name]) => result.cross_application.miss_rate_at_global[name] ?? null),
   );
-  const highGroupMiss = average(
+  // A subject with a naturally HIGHER ε, forced onto the lower global ε,
+  // over-flags -- its harm shows up as a higher FP rate, not miss rate.
+  const highGroupFp = average(
     entries
       .filter(([, eps]) => eps >= (globalEps ?? 0))
-      .map(([name]) => result.cross_application.miss_rate_at_global[name] ?? null),
+      .map(([name]) => result.cross_application.fp_rate_at_global[name] ?? null),
   );
 
   return (
@@ -31,13 +35,13 @@ export function CrossApplicationImpact({ result }: Props) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl bg-surface-2/60 p-4">
           <p className="text-xs text-muted">Subjects with a naturally lower threshold</p>
-          <p className="mt-1 text-2xl font-semibold text-danger">{pct(lowGroupFp)}</p>
-          <p className="mt-0.5 text-xs text-muted">average false-positive rate under the global threshold</p>
+          <p className="mt-1 text-2xl font-semibold text-danger">{pct(lowGroupMiss)}</p>
+          <p className="mt-0.5 text-xs text-muted">average missed-anomaly rate under the global threshold</p>
         </div>
         <div className="rounded-xl bg-surface-2/60 p-4">
           <p className="text-xs text-muted">Subjects with a naturally higher threshold</p>
-          <p className="mt-1 text-2xl font-semibold text-danger">{pct(highGroupMiss)}</p>
-          <p className="mt-0.5 text-xs text-muted">average missed-anomaly rate under the global threshold</p>
+          <p className="mt-1 text-2xl font-semibold text-danger">{pct(highGroupFp)}</p>
+          <p className="mt-0.5 text-xs text-muted">average false-positive rate under the global threshold</p>
         </div>
       </div>
       <p className="mt-4 text-xs text-muted">

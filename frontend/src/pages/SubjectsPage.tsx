@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, CreditCard, Server, Circle, Plus, FlaskConical, ArrowRight } from "lucide-react";
+import { Heart, CreditCard, Server, Circle, Plus, FlaskConical, ArrowRight, Search, X } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -40,6 +40,38 @@ export default function SubjectsPage() {
   const [description, setDescription] = useState("");
   const toast = useToast();
   const nav = useNavigate();
+
+  const [search, setSearch] = useState("");
+  const [epsilonMin, setEpsilonMin] = useState("");
+  const [epsilonMax, setEpsilonMax] = useState("");
+  const [algorithmFilter, setAlgorithmFilter] = useState<"all" | "IF" | "LSTM">("all");
+  const [minDatasets, setMinDatasets] = useState("");
+
+  const hasActiveFilters =
+    search.trim() !== "" || epsilonMin !== "" || epsilonMax !== "" || algorithmFilter !== "all" || minDatasets !== "";
+
+  const clearFilters = () => {
+    setSearch("");
+    setEpsilonMin("");
+    setEpsilonMax("");
+    setAlgorithmFilter("all");
+    setMinDatasets("");
+  };
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const min = epsilonMin === "" ? null : Number(epsilonMin);
+    const max = epsilonMax === "" ? null : Number(epsilonMax);
+    const minDs = minDatasets === "" ? null : Number(minDatasets);
+    return items.filter((s) => {
+      if (q && !(s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q))) return false;
+      if (min !== null && (s.active_epsilon === null || s.active_epsilon < min)) return false;
+      if (max !== null && (s.active_epsilon === null || s.active_epsilon > max)) return false;
+      if (algorithmFilter !== "all" && s.active_algorithm !== algorithmFilter) return false;
+      if (minDs !== null && s.n_datasets < minDs) return false;
+      return true;
+    });
+  }, [items, search, epsilonMin, epsilonMax, algorithmFilter, minDatasets]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,6 +157,84 @@ export default function SubjectsPage() {
         </Card>
       )}
 
+      {!loading && items.length > 0 && (
+        <Card>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              className="pl-9"
+              placeholder="Search by name or description…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">ε above</label>
+              <input
+                type="number"
+                step="0.0001"
+                placeholder="min"
+                value={epsilonMin}
+                onChange={(e) => setEpsilonMin(e.target.value)}
+                className="w-24 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">ε below</label>
+              <input
+                type="number"
+                step="0.0001"
+                placeholder="max"
+                value={epsilonMax}
+                onChange={(e) => setEpsilonMax(e.target.value)}
+                className="w-24 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Min datasets</label>
+              <input
+                type="number"
+                min={0}
+                step="1"
+                placeholder="e.g. 2"
+                value={minDatasets}
+                onChange={(e) => setMinDatasets(e.target.value)}
+                className="w-24 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Model</label>
+              <div className="flex gap-1.5">
+                {(["all", "IF", "LSTM"] as const).map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setAlgorithmFilter(a)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      algorithmFilter === a
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border text-muted hover:text-text"
+                    }`}
+                  >
+                    {a === "all" ? "All" : a}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} icon={<X className="h-3.5 w-3.5" />}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <p className="mt-3 text-xs text-muted">
+              Showing {filteredItems.length} of {items.length} subject{items.length === 1 ? "" : "s"}
+            </p>
+          )}
+        </Card>
+      )}
+
       {loading ? (
         <Card className="p-0">
           <TableRowsSkeleton rows={4} />
@@ -144,9 +254,22 @@ export default function SubjectsPage() {
             }
           />
         </Card>
+      ) : filteredItems.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Search}
+            title="No subjects match your filters"
+            message="Try loosening the search or filters above."
+            action={
+              <Button size="sm" variant="secondary" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            }
+          />
+        </Card>
       ) : (
         <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((s) => {
+          {filteredItems.map((s) => {
             const Icon = DOMAIN_ICON[inferDomain(s)];
             return (
               <StaggerItem key={s.id}>

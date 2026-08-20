@@ -52,6 +52,32 @@ export default function ExperimentsPage() {
 
   const trainedSubjects = useMemo(() => subjects.filter((s) => s.active_epsilon !== null), [subjects]);
 
+  const [search, setSearch] = useState("");
+  const [epsilonMin, setEpsilonMin] = useState("");
+  const [epsilonMax, setEpsilonMax] = useState("");
+  const [algorithmFilter, setAlgorithmFilter] = useState<"all" | "IF" | "LSTM">("all");
+
+  const filteredSubjects = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const min = epsilonMin === "" ? null : Number(epsilonMin);
+    const max = epsilonMax === "" ? null : Number(epsilonMax);
+    return trainedSubjects.filter((s) => {
+      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (min !== null && (s.active_epsilon === null || s.active_epsilon < min)) return false;
+      if (max !== null && (s.active_epsilon === null || s.active_epsilon > max)) return false;
+      if (algorithmFilter !== "all" && s.active_algorithm !== algorithmFilter) return false;
+      return true;
+    });
+  }, [trainedSubjects, search, epsilonMin, epsilonMax, algorithmFilter]);
+
+  // The filter must actually gate what gets run, not just what's shown --
+  // intersect explicit selections with the currently-filtered list so a
+  // subject hidden by a filter never sneaks into the experiment.
+  const runnableSelected = useMemo(() => {
+    const filteredIds = new Set(filteredSubjects.map((s) => s.id));
+    return Array.from(selected).filter((id) => filteredIds.has(id));
+  }, [selected, filteredSubjects]);
+
   const toggle = (id: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -61,13 +87,13 @@ export default function ExperimentsPage() {
     });
   };
 
-  const selectAll = () => setSelected(new Set(trainedSubjects.map((s) => s.id)));
+  const selectAll = (ids: number[]) => setSelected(new Set(ids));
   const selectNone = () => setSelected(new Set());
 
   const runExperiment = async () => {
     setRunning(true);
     try {
-      const r = await experimentsApi.run(Array.from(selected));
+      const r = await experimentsApi.run(runnableSelected);
       setResult(r.data);
     } catch (err) {
       toast({ tone: "error", title: "Experiment failed", message: errorMessage(err) });
@@ -115,12 +141,22 @@ export default function ExperimentsPage() {
       <SubjectSelector
         loading={loadingSubjects}
         subjects={trainedSubjects}
+        filteredSubjects={filteredSubjects}
+        runnableCount={runnableSelected.length}
         selected={selected}
         onToggle={toggle}
         onSelectAll={selectAll}
         onSelectNone={selectNone}
         onRun={runExperiment}
         running={running}
+        search={search}
+        onSearchChange={setSearch}
+        epsilonMin={epsilonMin}
+        onEpsilonMinChange={setEpsilonMin}
+        epsilonMax={epsilonMax}
+        onEpsilonMaxChange={setEpsilonMax}
+        algorithmFilter={algorithmFilter}
+        onAlgorithmFilterChange={setAlgorithmFilter}
       />
 
       <Card>
