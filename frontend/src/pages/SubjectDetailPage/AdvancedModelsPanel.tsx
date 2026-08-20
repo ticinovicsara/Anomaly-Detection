@@ -80,9 +80,11 @@ export function AdvancedModelsPanel({
                         <span className="font-mono text-muted">{m.threshold ? `ε=${m.threshold.epsilon.toFixed(4)}` : "-"}</span>
                         {m.evaluation && (
                           <>
-                            <span className="font-mono text-muted" title="F1 on held-out test set">
-                              F1={m.evaluation.f1.toFixed(3)}
-                            </span>
+                            {m.evaluation.f1 !== null && (
+                              <span className="font-mono text-muted" title="F1 on held-out test set">
+                                F1={m.evaluation.f1.toFixed(3)}
+                              </span>
+                            )}
                             <Link to={`/models/${m.id}/diagnostics`} className="text-muted hover:text-accent" title="Open diagnostics">
                               <FlaskConical className="h-3.5 w-3.5" />
                             </Link>

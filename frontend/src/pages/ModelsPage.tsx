@@ -192,7 +192,7 @@ export default function ModelsPage() {
                             )}
                             {advancedMode && m.selection_mode === "manual" && <Badge>manual</Badge>}
                             {m.threshold && <span className="font-mono text-xs text-muted">ε={m.threshold.epsilon.toFixed(4)}</span>}
-                            {m.metrics.evaluation && (
+                            {m.metrics.evaluation && m.metrics.evaluation.f1 !== null && (
                               <span className="font-mono text-xs text-muted" title="F1 on held-out test set">
                                 F1={m.metrics.evaluation.f1.toFixed(3)}
                               </span>
@@ -252,7 +252,7 @@ export default function ModelsPage() {
               </p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [&>*]:h-full">
             <StatMini label="Windows" value={result.total_windows} />
             <StatMini label="Anomalies" value={result.anomaly_count} tone="warning" />
             <StatMini label="Rate" value={`${(result.anomaly_rate * 100).toFixed(1)}%`} />
