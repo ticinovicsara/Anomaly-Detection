@@ -24,11 +24,14 @@ import logging
 import os
 import sys
 from datetime import datetime
+from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.db.models import Dataset, Model, Subject, Threshold, User  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
+from app.ml_core.evaluation import coerce_binary_label, evaluate_on_test  # noqa: E402
+from app.ml_core.preprocessing import load_scaler, numeric_only, temporal_split  # noqa: E402
 from app.services.experiments import run_personalization_experiment  # noqa: E402
 from scripts.mitbih_evaluation import _load_labeled_record  # noqa: E402
 
@@ -39,6 +42,29 @@ logger = logging.getLogger("import_mitbih_subjects")
 def _read_results(results_csv: str) -> dict:
     with open(results_csv, newline="") as f:
         return {row["record"]: row for row in csv.DictReader(f)}
+
+
+def _recompute_evaluation(
+    data_dir: str, record_id: str, model_path: str, scaler_path: str, epsilon: float
+) -> Optional[dict]:
+    """Full evaluate_on_test() dict (confusion, curve, n_test_samples/positive,
+    epsilon) from the already-trained artifacts on disk -- no retraining, just
+    re-scoring the same test split _fit_and_calibrate() used originally
+    (temporal_split is index-based, so re-deriving it from the same source
+    dataframe reproduces the same rows deterministically)."""
+    from app.ml_core.models.lstm_autoencoder import LSTMAutoencoder
+
+    df = _load_labeled_record(data_dir, record_id)
+    label_series = coerce_binary_label(df["label"])
+    df = numeric_only(df.drop(columns=["label"]))
+    label_series = label_series.reindex(df.index)
+    _train_df, _val_df, test_df, _train_lbl, _val_lbl, test_lbl = temporal_split(df, labels=label_series)
+
+    model = LSTMAutoencoder(window_size=50, n_features=df.shape[1])
+    model.load(model_path)
+    scaler = load_scaler(scaler_path)
+
+    return evaluate_on_test(model, "LSTM", test_df, test_lbl, scaler, epsilon)
 
 
 def run(data_dir: str, results_csv: str, artifacts_dir: str, datasets_dir: str, user_email: str) -> None:
@@ -100,6 +126,25 @@ def run(data_dir: str, results_csv: str, artifacts_dir: str, datasets_dir: str, 
         db.commit()
         db.refresh(dataset)
 
+        epsilon = float(row["epsilon"])
+        try:
+            evaluation = _recompute_evaluation(data_dir, record_id, model_path, scaler_path, epsilon)
+        except Exception:
+            logger.exception(
+                "record %s: could not recompute full evaluation, falling back to summary metrics from the CSV",
+                record_id,
+            )
+            evaluation = None
+        if evaluation is None:
+            evaluation = {
+                "precision": float(row["precision"]) if row["precision"] not in (None, "", "None") else None,
+                "recall": float(row["recall"]) if row["recall"] not in (None, "", "None") else None,
+                "f1": float(row["f1"]) if row["f1"] not in (None, "", "None") else None,
+                "auc": float(row["auc"]) if row["auc"] not in (None, "", "None") else None,
+                "n_test_samples": int(row["n_test_samples"]) if row["n_test_samples"] not in (None, "", "None") else None,
+                "n_test_positive": int(row["n_test_positive"]) if row["n_test_positive"] not in (None, "", "None") else None,
+            }
+
         model_row = Model(
             user_id=user.id,
             subject_id=subject.id,
@@ -116,14 +161,7 @@ def run(data_dir: str, results_csv: str, artifacts_dir: str, datasets_dir: str, 
             model_path=model_path,
             scaler_path=scaler_path,
             trained_at=datetime.utcnow(),
-            metrics_json={
-                "evaluation": {
-                    "precision": float(row["precision"]) if row["precision"] not in (None, "", "None") else None,
-                    "recall": float(row["recall"]) if row["recall"] not in (None, "", "None") else None,
-                    "f1": float(row["f1"]) if row["f1"] not in (None, "", "None") else None,
-                    "auc": float(row["auc"]) if row["auc"] not in (None, "", "None") else None,
-                }
-            },
+            metrics_json={"evaluation": evaluation},
         )
         db.add(model_row)
         db.commit()
