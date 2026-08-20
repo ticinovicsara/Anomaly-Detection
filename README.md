@@ -115,18 +115,6 @@ Once both servers are running (frontend + backend), the typical flow through the
 8. **Experiments page** (`/experiments`) - run the personalization experiment across two or more Subjects to see the measured impact of a shared global threshold vs. each Subject's own, or try the synthetic preset demo without uploading anything.
 9. **Dashboard** (`/`) - overview of recent anomalies, trained models, and (once 2+ Subjects are trained) the threshold spread across them.
 
-## Screenshots
-
-_Add a few screenshots here to give reviewers a quick visual tour before they clone the repo - e.g. the Dashboard, a Subject detail page with its threshold history, and the Model diagnostics chart._
-
-```markdown
-![Dashboard](docs/screenshots/dashboard.png)
-![Subject detail - personalized threshold and history](docs/screenshots/subject-detail.png)
-![Model diagnostics - confusion matrix and predicted-vs-actual chart](docs/screenshots/model-diagnostics.png)
-```
-
-Save the image files under `docs/screenshots/` (create the folder if it doesn't exist yet) and drop the same three lines outside this code fence - GitHub renders them automatically once committed.
-
 ## Environment variables
 
 Backend (`backend/.env`, see `backend/.env.example`):
