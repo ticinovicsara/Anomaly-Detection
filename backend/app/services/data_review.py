@@ -29,7 +29,7 @@ def find_candidate_anomalies(
         if n < _MIN_ROWS:
             return []
 
-        m = IFModel(contamination=min(0.1, max(0.01, top_fraction)))
+        m = IFModel()
         m.train(num_df.values)
         scores = np.asarray(m.score(num_df.values))
 

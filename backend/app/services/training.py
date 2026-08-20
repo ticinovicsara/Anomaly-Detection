@@ -80,7 +80,7 @@ def _fit_and_calibrate(df: pd.DataFrame, algo: str, base_path: str, label_column
         m.save(model_path)
         val_scores = m.score(W_val)
     else:
-        m = IFModel(contamination=0.01)
+        m = IFModel()
         m.train(X_train)
         model_path = base_path + ".pkl"
         m.save(model_path)

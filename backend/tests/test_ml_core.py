@@ -15,7 +15,7 @@ def test_if_detects_synthetic_anomalies():
     X_anom = rng.normal(8, 1, (10, 5))
     X = np.vstack([X_normal, X_anom])
 
-    m = IFModel(contamination=0.02)
+    m = IFModel()
     m.train(X)
     scores = m.score(X)
 

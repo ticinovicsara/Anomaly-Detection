@@ -8,11 +8,14 @@ from app.ml_core.models.base import AnomalyModel
 class IFModel(AnomalyModel):
     algorithm = "IF"
 
-    def __init__(self, contamination: float = 0.01, n_estimators: int = 100, random_state: int = 42):
-        self.contamination = contamination
+    def __init__(self, n_estimators: int = 100, random_state: int = 42):
+        # No `contamination` param: this class only ever calls score_samples()
+        # (see score() below), which sklearn computes independently of
+        # contamination -- that knob only shifts the offset used by
+        # decision_function()/predict(), which we never call. The real
+        # anomaly cutoff is the calibrated epsilon (threshold.py), not this.
         self.model = IsolationForest(
             n_estimators=n_estimators,
-            contamination=contamination,
             random_state=random_state,
             n_jobs=-1,
         )
