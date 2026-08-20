@@ -61,31 +61,59 @@ def _load_labeled_record(data_dir: str, record_id: str) -> pd.DataFrame:
     return pd.DataFrame({"signal": signal, "label": label})
 
 
+FIELDNAMES = [
+    "record", "epsilon", "mu", "sigma", "precision", "recall", "f1", "auc",
+    "n_test_samples", "n_test_positive",
+]
+
+
+def _already_done(out_csv: str) -> set:
+    """Record IDs already written to out_csv from a previous, interrupted run."""
+    if not os.path.isfile(out_csv):
+        return set()
+    with open(out_csv, newline="") as f:
+        return {row["record"] for row in csv.DictReader(f)}
+
+
 def run(data_dir: str, out_csv: str, algorithm: str, records: List[str]) -> None:
     out_dir = os.path.dirname(out_csv) or "."
     os.makedirs(out_dir, exist_ok=True)
     artifacts_dir = os.path.join(out_dir, "_mitbih_artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
 
-    rows = []
-    for record_id in records:
-        try:
-            df = _load_labeled_record(data_dir, record_id)
-        except Exception:
-            logger.exception("Could not load record %s, skipping", record_id)
-            continue
+    done = _already_done(out_csv)
+    todo = [r for r in records if r not in done]
+    if done:
+        logger.info("Resuming: %d/%d records already done, %d left", len(done), len(records), len(todo))
 
-        base_path = os.path.join(artifacts_dir, f"record_{record_id}")
-        try:
-            fit = _fit_and_calibrate(df, algorithm, base_path, label_column="label")
-        except Exception:
-            logger.exception("Training failed for record %s, skipping", record_id)
-            continue
+    file_exists = os.path.isfile(out_csv)
+    # Line-buffered (buffering=1) + a flush after every row -- so a killed
+    # process (shutdown, sleep, crash) only loses the in-flight record, and
+    # rerunning the same command picks up from `_already_done` instead of
+    # starting the whole 48-record, multi-day run over from scratch.
+    with open(out_csv, "a", newline="", buffering=1) as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        if not file_exists:
+            writer.writeheader()
+            f.flush()
 
-        thr = fit["threshold"]
-        ev = fit["evaluation"] or {}
-        rows.append(
-            {
+        for record_id in todo:
+            try:
+                df = _load_labeled_record(data_dir, record_id)
+            except Exception:
+                logger.exception("Could not load record %s, skipping", record_id)
+                continue
+
+            base_path = os.path.join(artifacts_dir, f"record_{record_id}")
+            try:
+                fit = _fit_and_calibrate(df, algorithm, base_path, label_column="label")
+            except Exception:
+                logger.exception("Training failed for record %s, skipping", record_id)
+                continue
+
+            thr = fit["threshold"]
+            ev = fit["evaluation"] or {}
+            row = {
                 "record": record_id,
                 "epsilon": thr["epsilon"],
                 "mu": thr["mu"],
@@ -97,23 +125,22 @@ def run(data_dir: str, out_csv: str, algorithm: str, records: List[str]) -> None
                 "n_test_samples": ev.get("n_test_samples"),
                 "n_test_positive": ev.get("n_test_positive"),
             }
-        )
-        logger.info(
-            "record %s: epsilon=%.4f f1=%s auc=%s",
-            record_id, thr["epsilon"], ev.get("f1"), ev.get("auc"),
-        )
+            writer.writerow(row)
+            f.flush()
+            logger.info(
+                "record %s: epsilon=%.4f f1=%s auc=%s",
+                record_id, thr["epsilon"], ev.get("f1"), ev.get("auc"),
+            )
+
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
 
     if not rows:
         logger.error("No records were successfully evaluated")
         return
 
-    with open(out_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-
-    epsilons = np.array([r["epsilon"] for r in rows])
-    f1s = np.array([r["f1"] for r in rows if r["f1"] is not None])
+    epsilons = np.array([float(r["epsilon"]) for r in rows])
+    f1s = np.array([float(r["f1"]) for r in rows if r["f1"] not in (None, "", "None")])
     logger.info("Wrote %d/%d records to %s", len(rows), len(records), out_csv)
     logger.info(
         "epsilon: min=%.4f max=%.4f mean=%.4f std=%.4f range_ratio=%s",
