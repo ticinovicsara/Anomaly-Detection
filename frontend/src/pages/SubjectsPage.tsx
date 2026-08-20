@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Heart, CreditCard, Server, Circle, Plus, FlaskConical, ArrowRight, Search, X } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { Button } from "@/components/Button";
@@ -41,22 +41,36 @@ export default function SubjectsPage() {
   const toast = useToast();
   const nav = useNavigate();
 
-  const [search, setSearch] = useState("");
-  const [epsilonMin, setEpsilonMin] = useState("");
-  const [epsilonMax, setEpsilonMax] = useState("");
-  const [algorithmFilter, setAlgorithmFilter] = useState<"all" | "IF" | "LSTM">("all");
-  const [minDatasets, setMinDatasets] = useState("");
+  // Filters live in the URL (not local state) so the back button and a
+  // bookmarked/shared link both restore the exact same filtered view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get("search") ?? "";
+  const epsilonMin = searchParams.get("eps_min") ?? "";
+  const epsilonMax = searchParams.get("eps_max") ?? "";
+  const algorithmFilter = (searchParams.get("algo") as "all" | "IF" | "LSTM" | null) ?? "all";
+  const minDatasets = searchParams.get("min_datasets") ?? "";
+
+  const setParam = (key: string, value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value === "" || value === "all") next.delete(key);
+        else next.set(key, value);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  const setSearch = (v: string) => setParam("search", v);
+  const setEpsilonMin = (v: string) => setParam("eps_min", v);
+  const setEpsilonMax = (v: string) => setParam("eps_max", v);
+  const setAlgorithmFilter = (v: "all" | "IF" | "LSTM") => setParam("algo", v);
+  const setMinDatasets = (v: string) => setParam("min_datasets", v);
 
   const hasActiveFilters =
     search.trim() !== "" || epsilonMin !== "" || epsilonMax !== "" || algorithmFilter !== "all" || minDatasets !== "";
 
-  const clearFilters = () => {
-    setSearch("");
-    setEpsilonMin("");
-    setEpsilonMax("");
-    setAlgorithmFilter("all");
-    setMinDatasets("");
-  };
+  const clearFilters = () => setSearchParams({}, { replace: true });
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -112,7 +126,7 @@ export default function SubjectsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Subjects"
-        subtitle="The entities you track — a patient, a card, a service. Each gets its own personalized threshold."
+        subtitle="The entities you track - a patient, a card, a service. Each gets its own personalized threshold."
         action={
           <>
             <Link to="/experiments">
@@ -152,7 +166,7 @@ export default function SubjectsPage() {
             )}
           </div>
           <p className="mt-2 text-xs text-muted">
-            This is a summary only — each subject keeps its own accuracy shown individually below.
+            This is a summary only - each subject keeps its own accuracy shown individually below.
           </p>
         </Card>
       )}
@@ -244,7 +258,7 @@ export default function SubjectsPage() {
           <EmptyState
             icon={Circle}
             title="No subjects yet"
-            message="Upload data to get started — each upload becomes (or joins) a subject."
+            message="Upload data to get started - each upload becomes (or joins) a subject."
             action={
               <Link to="/upload">
                 <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />}>
@@ -273,7 +287,10 @@ export default function SubjectsPage() {
             const Icon = DOMAIN_ICON[inferDomain(s)];
             return (
               <StaggerItem key={s.id}>
-                <Link to={`/subjects/${s.id}`}>
+                <Link
+                  to={`/subjects/${s.id}`}
+                  state={{ orderedSubjects: filteredItems.map((x) => ({ id: x.id, name: x.name })) }}
+                >
                   <Card hoverable className="h-full">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
