@@ -13,7 +13,13 @@ from app.core.config import settings
 from app.db.models import Dataset, Model, Subject, Threshold
 from app.services.prediction import run_prediction
 from app.services.subjects import get_active_model
-from app.services.training import _TRAIN_LOCK, _fit_and_calibrate, _load_subject_dataframe, _metrics_with_evaluation
+from app.services.training import (
+    _TRAIN_LOCK,
+    _fit_and_calibrate,
+    _load_subject_dataframe,
+    _metrics_with_evaluation,
+    _subject_label_column,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +28,15 @@ _DEMO_N_ROWS = 1500
 
 
 def _subject_scores(subject: Subject, model: Model) -> list[float]:
-    """Re-scores a Subject's own data so the comparison doesn't need a prior /predict call."""
+    """Re-scores a Subject's own data so the comparison doesn't need a prior /predict call.
+    Must drop the same label_column _fit_and_calibrate dropped at training time --
+    otherwise a Subject trained with a ground-truth column excluded gets re-scored
+    with it still present, the scaler sees the wrong feature count, and scoring
+    silently fails (caught by the caller, reported as a missing FP/miss rate)."""
     df = _load_subject_dataframe(subject)
+    label_column = _subject_label_column(subject)
+    if label_column and label_column in df.columns:
+        df = df.drop(columns=[label_column])
     _batch_id, results = run_prediction(model, model.threshold, df)
     return [r["score"] for r in results]
 
@@ -117,7 +130,10 @@ def aggregate_evaluation_metrics(
     for s in subjects:
         active = get_active_model(s, db)
         evaluation = (active.metrics_json or {}).get("evaluation") if active and active.metrics_json else None
-        if not evaluation:
+        # `evaluation` can be a truthy dict with every value set to None (e.g. a
+        # Subject whose test split had no positive class) -- guard on the value,
+        # not just presence of the key, or these fail response_model validation.
+        if not evaluation or evaluation.get("f1") is None:
             excluded_subject_ids.append(s.id)
             continue
         f1_by_subject[s.name] = evaluation["f1"]
