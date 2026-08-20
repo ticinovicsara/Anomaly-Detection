@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { Brain, ChevronDown, FlaskConical, PlayCircle, Upload as UploadIcon } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Brain, ChevronDown, FlaskConical, PlayCircle, Search, Upload as UploadIcon } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Badge, statusTone } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
+import { Input } from "@/components/Input";
 import { PageHeader } from "@/components/PageHeader";
 import { FullPageSpinner } from "@/components/Spinner";
 import { useToast } from "@/components/Toast";
@@ -31,6 +32,25 @@ export default function ModelsPage() {
   const [targetModel, setTargetModel] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const toast = useToast();
+
+  // ?search= filters which subject groups show; ?subject_id= (set by a link
+  // from that Subject's own page) scrolls straight to it instead of making
+  // you scan every group by hand.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get("search") ?? "";
+  const setSearch = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === "") next.delete("search");
+        else next.set("search", v);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  const highlightSubjectId = searchParams.get("subject_id") ? Number(searchParams.get("subject_id")) : null;
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,14 +118,22 @@ export default function ModelsPage() {
       arr.push(m);
       bySubject.set(m.subject_id, arr);
     }
+    const q = search.trim().toLowerCase();
     return subjects
       .map((s) => {
         const all = bySubject.get(s.id) ?? [];
         const visible = advancedMode ? all : all.filter((m) => m.is_active).length > 0 ? all.filter((m) => m.is_active) : all.slice(0, 1);
         return { subject: s, models: visible };
       })
-      .filter((g) => g.models.length > 0);
-  }, [items, subjects, advancedMode]);
+      .filter((g) => g.models.length > 0)
+      .filter((g) => !q || g.subject.name.toLowerCase().includes(q));
+  }, [items, subjects, advancedMode, search]);
+
+  useEffect(() => {
+    if (highlightSubjectId === null || loading) return;
+    cardRefs.current.get(highlightSubjectId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightSubjectId, loading, groups.length]);
 
   const toggleCollapsed = (subjectId: number) => {
     setCollapsed((prev) => {
@@ -129,18 +157,40 @@ export default function ModelsPage() {
         }
       />
 
+      {subjects.length > 8 && (
+        <div className="relative max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            className="pl-9"
+            placeholder="Search subjects…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       {groups.length === 0 ? (
         <Card>
           <EmptyState
             icon={Brain}
-            title="No models yet"
-            message="Upload a CSV and start training to see your models here."
+            title={subjects.length === 0 ? "No models yet" : "No subjects match your search"}
+            message={
+              subjects.length === 0
+                ? "Upload a CSV and start training to see your models here."
+                : "Try a different search term."
+            }
             action={
-              <Link to="/upload">
-                <Button size="sm" variant="secondary" icon={<UploadIcon className="h-3.5 w-3.5" />}>
-                  Upload data
+              subjects.length === 0 ? (
+                <Link to="/upload">
+                  <Button size="sm" variant="secondary" icon={<UploadIcon className="h-3.5 w-3.5" />}>
+                    Upload data
+                  </Button>
+                </Link>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => setSearch("")}>
+                  Clear search
                 </Button>
-              </Link>
+              )
             }
           />
         </Card>
@@ -148,9 +198,18 @@ export default function ModelsPage() {
         <div className="space-y-4">
           {groups.map(({ subject, models }) => {
             const isCollapsed = collapsed.has(subject.id);
+            const isHighlighted = subject.id === highlightSubjectId;
             return (
-              <Card key={subject.id} className="p-0 overflow-hidden">
-                <button
+              <div
+                key={subject.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(subject.id, el);
+                  else cardRefs.current.delete(subject.id);
+                }}
+                className={`rounded-2xl transition-shadow ${isHighlighted ? "ring-2 ring-accent" : ""}`}
+              >
+                <Card className="p-0 overflow-hidden">
+                  <button
                   onClick={() => toggleCollapsed(subject.id)}
                   className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left hover:bg-surface-2/40"
                 >
@@ -226,6 +285,7 @@ export default function ModelsPage() {
                   </div>
                 </div>
               </Card>
+              </div>
             );
           })}
         </div>
@@ -258,6 +318,15 @@ export default function ModelsPage() {
             <StatMini label="Rate" value={`${(result.anomaly_rate * 100).toFixed(1)}%`} />
             <StatMini label="Threshold" value={result.threshold.toFixed(3)} />
           </div>
+          {result.has_labels && (
+            <p className="mt-4 text-xs text-muted">
+              This file had a <code>label</code> column - see which windows were correct, false alarms, or missed on{" "}
+              <Link to={`/models/${result.model_id}/diagnostics`} className="text-accent hover:underline">
+                this model's diagnostics page
+              </Link>
+              .
+            </p>
+          )}
         </Card>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, FlaskConical } from "lucide-react";
+import { ArrowLeft, FlaskConical, Info } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Badge, statusTone } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
@@ -14,6 +14,7 @@ import {
   Subject,
 } from "@/api/client";
 import { ConfusionMatrix } from "./ConfusionMatrix";
+import { LabeledPredictRuns } from "./LabeledPredictRuns";
 import { PredictedVsActualChart } from "./PredictedVsActualChart";
 import { WorstErrorsTable } from "./WorstErrorsTable";
 import { outcomeOf } from "./helpers";
@@ -104,11 +105,24 @@ export default function ModelDiagnosticsPage() {
         </Card>
       ) : (
         <>
+          <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface-2/60 p-3.5 text-xs text-muted">
+            <Info className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
+            <p>
+              This section is a one-time backtest computed when the model was trained, using the ground-truth
+              labels you marked at upload - it doesn&apos;t run again automatically. To check a specific new file
+              instead, run <b>Predict</b> on the Models page with a CSV that includes a <code>label</code> column -
+              the result then appears both here (under &quot;Labeled test runs&quot; below) and on your Anomalies
+              page, tagged correct / false alarm / missed.
+            </p>
+          </div>
+
           <Card>
             <h3 className="text-sm font-semibold text-text">Metrics on held-out test set</h3>
             <p className="mt-1 text-xs text-muted">
-              {evaluation.n_test_samples.toLocaleString()} test points · {evaluation.n_test_positive.toLocaleString()}{" "}
-              actually anomalous · evaluated at the real operational threshold ε
+              {evaluation.n_test_samples != null && evaluation.n_test_positive != null
+                ? `${evaluation.n_test_samples.toLocaleString()} test points · ${evaluation.n_test_positive.toLocaleString()} actually anomalous · `
+                : ""}
+              evaluated at the real operational threshold ε
               {evaluation.epsilon !== null && evaluation.epsilon !== undefined ? ` = ${evaluation.epsilon.toFixed(4)}` : ""}
             </p>
             <div className="mt-4">
@@ -123,6 +137,8 @@ export default function ModelDiagnosticsPage() {
           <WorstErrorsTable errors={worstErrors} />
         </>
       )}
+
+      <LabeledPredictRuns modelId={model.id} epsilon={model.threshold?.epsilon} />
     </div>
   );
 }

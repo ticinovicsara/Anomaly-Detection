@@ -144,6 +144,9 @@ class Prediction(Base):
     window_idx = Column(Integer, nullable=False)
     score = Column(Float, nullable=False)
     is_anomaly = Column(Boolean, nullable=False)
+    # Ground truth for this window, only set when the predict upload had a
+    # usable "label" column -- null for ordinary, unlabeled production use.
+    actual = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     model = relationship("Model", back_populates="predictions")
@@ -159,6 +162,14 @@ class AnomalyEvent(Base):
     severity = Column(String(20), default="warning")  # info | warning | critical
     label = Column(String(30), default="unlabeled")  # unlabeled | confirmed | false_positive | resolved
     note = Column(Text)
+    # Ground-truth outcome, only set when Prediction.actual was known (a
+    # labeled predict upload). Null for ordinary, unlabeled production use.
+    outcome = Column(String(10))  # tp | fp | fn
+    # Whether this row exists because the system flagged the window, or
+    # because a labeled ground truth said it was anomalous and the system
+    # missed it (which never sets is_anomaly, so it needs its own row to
+    # be visible on the Anomalies page at all).
+    detection_source = Column(String(30), default="flagged", nullable=False)  # flagged | missed_ground_truth
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     resolved_at = Column(DateTime)
 

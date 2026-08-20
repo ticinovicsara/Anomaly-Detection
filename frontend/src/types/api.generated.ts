@@ -158,6 +158,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/predict/{model_id}/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Labeled Batches
+         * @description Every Predict run against this model that included a usable ground-truth
+         *     label -- ordinary unlabeled predictions never show up here.
+         */
+        get: operations["list_labeled_batches_predict__model_id__batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/predict/{model_id}/batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Labeled Batch */
+        get: operations["get_labeled_batch_predict__model_id__batches__batch_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/anomalies": {
         parameters: {
             query?: never;
@@ -264,6 +302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/subjects/{subject_id}/threshold-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Threshold History */
+        get: operations["list_threshold_history_subjects__subject_id__threshold_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/subjects/{subject_id}/data-review/precheck": {
         parameters: {
             query?: never;
@@ -275,10 +330,7 @@ export interface paths {
         put?: never;
         /**
          * Precheck Data Review
-         * @description Runs (or reuses, if already run) the candidate-anomaly scan on the
-         *     Subject's newest dataset -- callable any time, independent of
-         *     /retrain, so the frontend can show candidates proactively right after
-         *     an upload rather than only when a blocked retrain forces the issue.
+         * @description Runs (or reuses) the candidate-anomaly scan on the newest dataset.
          */
         post: operations["precheck_data_review_subjects__subject_id__data_review_precheck_post"];
         delete?: never;
@@ -456,6 +508,13 @@ export interface components {
             note?: string | null;
             /** Created At */
             created_at: string;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Detection Source
+             * @default flagged
+             */
+            detection_source: string;
         };
         /** Body_analyze_upload_upload_analyze_post */
         Body_analyze_upload_upload_analyze_post: {
@@ -573,9 +632,9 @@ export interface components {
             /** Auc */
             auc: number | null;
             /** N Test Samples */
-            n_test_samples: number;
+            n_test_samples?: number | null;
             /** N Test Positive */
-            n_test_positive: number;
+            n_test_positive?: number | null;
             /** Epsilon */
             epsilon?: number | null;
             confusion?: components["schemas"]["ConfusionOut"] | null;
@@ -657,6 +716,54 @@ export interface components {
         PersonalizationIn: {
             /** Subject Ids */
             subject_ids: number[];
+        };
+        /** PredictBatchDetailOut */
+        PredictBatchDetailOut: {
+            /** Batch Id */
+            batch_id: string;
+            /** Model Id */
+            model_id: number;
+            /** Created At */
+            created_at: string;
+            /** N Windows */
+            n_windows: number;
+            confusion: components["schemas"]["PredictConfusionOut"];
+            /** Curve */
+            curve: components["schemas"]["PredictCurvePointOut"][];
+        };
+        /** PredictBatchSummaryOut */
+        PredictBatchSummaryOut: {
+            /** Batch Id */
+            batch_id: string;
+            /** Model Id */
+            model_id: number;
+            /** Created At */
+            created_at: string;
+            /** N Windows */
+            n_windows: number;
+            confusion: components["schemas"]["PredictConfusionOut"];
+        };
+        /** PredictConfusionOut */
+        PredictConfusionOut: {
+            /** Tp */
+            tp: number;
+            /** Fp */
+            fp: number;
+            /** Tn */
+            tn: number;
+            /** Fn */
+            fn: number;
+        };
+        /** PredictCurvePointOut */
+        PredictCurvePointOut: {
+            /** I */
+            i: number;
+            /** Score */
+            score: number;
+            /** Actual */
+            actual: number;
+            /** Predicted */
+            predicted: number;
         };
         /** PresetDemoOut */
         PresetDemoOut: {
@@ -822,6 +929,29 @@ export interface components {
             description?: string | null;
             /** Pre Retrain Check Enabled */
             pre_retrain_check_enabled?: boolean | null;
+        };
+        /** ThresholdHistoryOut */
+        ThresholdHistoryOut: {
+            /** Id */
+            id: number;
+            /** Model Id */
+            model_id: number;
+            /** Algorithm */
+            algorithm: string;
+            /** Mu */
+            mu: number;
+            /** Sigma */
+            sigma: number;
+            /** Epsilon */
+            epsilon: number;
+            /** Z Multiplier */
+            z_multiplier: number;
+            /** N Rows */
+            n_rows: number | null;
+            /** Source */
+            source: string;
+            /** Created At */
+            created_at: string;
         };
         /** TokenOut */
         TokenOut: {
@@ -1239,12 +1369,80 @@ export interface operations {
             };
         };
     };
+    list_labeled_batches_predict__model_id__batches_get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path: {
+                model_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatchSummaryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_labeled_batch_predict__model_id__batches__batch_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path: {
+                model_id: number;
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatchDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_anomalies_anomalies_get: {
         parameters: {
             query?: {
                 model_id?: number | null;
                 subject_id?: number | null;
                 label?: string | null;
+                outcome?: string | null;
                 limit?: number;
             };
             header: {
@@ -1571,6 +1769,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetrainOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_threshold_history_subjects__subject_id__threshold_history_get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path: {
+                subject_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThresholdHistoryOut"][];
                 };
             };
             /** @description Validation Error */

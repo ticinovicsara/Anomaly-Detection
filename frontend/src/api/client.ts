@@ -10,6 +10,8 @@ import type {
   EvaluationSummary,
   ExperimentResult,
   ModelInfo,
+  PredictBatchDetail,
+  PredictBatchSummary,
   PredictResult,
   PresetDemoResult,
   Profile,
@@ -249,6 +251,10 @@ export const models = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  labeledBatches: (modelId: number, opts?: RequestOpts) =>
+    api.get<PredictBatchSummary[]>(`/predict/${modelId}/batches`, { signal: opts?.signal }),
+  labeledBatchDetail: (modelId: number, batchId: string, opts?: RequestOpts) =>
+    api.get<PredictBatchDetail>(`/predict/${modelId}/batches/${batchId}`, { signal: opts?.signal }),
 };
 
 export const anomalies = {
@@ -257,6 +263,7 @@ export const anomalies = {
       model_id?: number;
       subject_id?: number;
       label?: string;
+      outcome?: string;
       limit?: number;
     },
     opts?: RequestOpts,

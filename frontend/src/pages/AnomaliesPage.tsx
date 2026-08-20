@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, X, RotateCcw, Filter, ShieldCheck, ChevronDown } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Check, X, RotateCcw, Filter, ShieldCheck, ChevronDown, Search } from "lucide-react";
 import {
   Button,
   Card,
   Badge,
+  Input,
   severityTone,
   useToast,
   PageHeader,
@@ -26,6 +28,19 @@ const labels = [
   { value: "resolved", label: "Resolved" },
 ];
 
+// Ground-truth outcome (from a labeled Predict run), separate from the
+// manual `label` curation above -- this is automatic, based on a real
+// "label" column in the uploaded file, not something a person set.
+const outcomes = [
+  { value: "", label: "Any outcome" },
+  { value: "tp", label: "Correct" },
+  { value: "fp", label: "False alarm" },
+  { value: "fn", label: "Missed" },
+];
+const OUTCOME_TONE: Record<string, "success" | "warning" | "danger"> = { tp: "success", fp: "warning", fn: "danger" };
+const OUTCOME_LABEL: Record<string, string> = { tp: "✓ correct", fp: "✗ false alarm", fn: "⚠ missed" };
+const OUTCOME_RANK: Record<string, number> = { fn: 3, fp: 2, tp: 1 };
+
 // Overlapping sliding windows mean one real anomaly can produce many
 // consecutive AnomalyEvents (window_idx close together). Anything within
 // this many windows of the previous one is treated as the same episode.
@@ -38,6 +53,7 @@ type Episode = {
   windowMax: number;
   peakScore: number;
   worstSeverity: string;
+  worstOutcome: string | null;
   events: Anomaly[];
 };
 
@@ -61,6 +77,11 @@ function groupIntoEpisodes(events: Anomaly[]): Episode[] {
       const worst = current.reduce((a, b) =>
         (severityRank[b.severity] ?? 0) > (severityRank[a.severity] ?? 0) ? b : a,
       );
+      const eventOutcomes = current.map((e) => e.outcome).filter((o): o is string => o != null);
+      const worstOutcome =
+        eventOutcomes.length === 0
+          ? null
+          : eventOutcomes.reduce((a, b) => ((OUTCOME_RANK[b] ?? 0) > (OUTCOME_RANK[a] ?? 0) ? b : a));
       episodes.push({
         key: `${modelId}-${windows[0]}`,
         modelId,
@@ -68,6 +89,7 @@ function groupIntoEpisodes(events: Anomaly[]): Episode[] {
         windowMax: Math.max(...windows),
         peakScore: Math.max(...scores),
         worstSeverity: worst.severity,
+        worstOutcome,
         events: [...current],
       });
       current = [];
@@ -90,11 +112,51 @@ export default function AnomaliesPage() {
   const [items, setItems] = useState<Anomaly[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [labelFilter, setLabelFilter] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState<number | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Set<number>>(new Set());
   const [expandedEpisodes, setExpandedEpisodes] = useState<Set<string>>(new Set());
+  const [subjectSearch, setSubjectSearch] = useState("");
   const toast = useToast();
+
+  // label + subject filters live in the URL -- lets a link from a Subject's
+  // own page (?subject_id=X) preselect it, and lets the back button restore
+  // whatever filter you had instead of resetting to "All".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const labelFilter = searchParams.get("label") ?? "";
+  const subjectFilter = searchParams.get("subject_id") ? Number(searchParams.get("subject_id")) : null;
+  const setLabelFilter = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === "") next.delete("label");
+        else next.set("label", v);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  const setSubjectFilter = (subjectId: number | null) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (subjectId === null) next.delete("subject_id");
+        else next.set("subject_id", String(subjectId));
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  const outcomeFilter = searchParams.get("outcome") ?? "";
+  const setOutcomeFilter = (v: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === "") next.delete("outcome");
+        else next.set("outcome", v);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,6 +175,7 @@ export default function AnomaliesPage() {
         {
           label: labelFilter || undefined,
           subject_id: subjectFilter ?? undefined,
+          outcome: outcomeFilter || undefined,
           limit: 200,
         },
         { signal: controller.signal },
@@ -125,7 +188,7 @@ export default function AnomaliesPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [labelFilter, subjectFilter]);
+  }, [labelFilter, subjectFilter, outcomeFilter]);
 
   const subjectById = new Map(subjects.map((s) => [s.id, s]));
 
@@ -188,7 +251,7 @@ export default function AnomaliesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Anomalies"
-        subtitle="Grouped by subject, then by episode — overlapping windows from the same real event are collapsed into one row."
+        subtitle="Grouped by subject, then by episode - overlapping windows from the same real event are collapsed into one row."
       />
 
       {/* Summary */}
@@ -219,32 +282,67 @@ export default function AnomaliesPage() {
           </button>
         ))}
       </div>
-      {subjects.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="w-4" />
+
+      {/* Ground-truth outcome filter -- only meaningful once at least one
+          labeled Predict run exists, but always shown for a predictable,
+          consistent filter bar. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="w-4" />
+        {outcomes.map((o) => (
           <button
-            onClick={() => setSubjectFilter(null)}
+            key={o.value}
+            onClick={() => setOutcomeFilter(o.value)}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              subjectFilter === null
+              outcomeFilter === o.value
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-border text-muted hover:text-text"
             }`}
           >
-            All subjects
+            {o.value ? OUTCOME_LABEL[o.value] : o.label}
           </button>
-          {subjects.map((s) => (
+        ))}
+      </div>
+      {subjects.length > 0 && (
+        <div className="space-y-2.5">
+          {subjects.length > 8 && (
+            <div className="relative max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input
+                className="pl-9"
+                placeholder="Search subjects…"
+                value={subjectSearch}
+                onChange={(e) => setSubjectSearch(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="w-4" />
             <button
-              key={s.id}
-              onClick={() => setSubjectFilter(s.id)}
+              onClick={() => setSubjectFilter(null)}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                subjectFilter === s.id
+                subjectFilter === null
                   ? "border-accent bg-accent/10 text-accent"
                   : "border-border text-muted hover:text-text"
               }`}
             >
-              {s.name}
+              All subjects
             </button>
-          ))}
+            {subjects
+              .filter((s) => s.name.toLowerCase().includes(subjectSearch.trim().toLowerCase()))
+              .map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSubjectFilter(s.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    subjectFilter === s.id
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border text-muted hover:text-text"
+                  }`}
+                >
+                  {s.name}
+                </button>
+              ))}
+          </div>
         </div>
       )}
 
@@ -326,7 +424,12 @@ export default function AnomaliesPage() {
                                 </td>
                                 <td className="px-6 py-3 font-mono text-xs">{ep.peakScore.toFixed(3)}</td>
                                 <td className="px-6 py-3">
-                                  <Badge tone={severityTone(ep.worstSeverity)}>{ep.worstSeverity}</Badge>
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge tone={severityTone(ep.worstSeverity)}>{ep.worstSeverity}</Badge>
+                                    {ep.worstOutcome && (
+                                      <Badge tone={OUTCOME_TONE[ep.worstOutcome]}>{OUTCOME_LABEL[ep.worstOutcome]}</Badge>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-6 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                   <div className="inline-flex gap-1">
@@ -382,17 +485,22 @@ export default function AnomaliesPage() {
                                             <td className="py-2 pr-4 font-mono">{a.window_idx}</td>
                                             <td className="py-2 pr-4 font-mono">{a.score.toFixed(3)}</td>
                                             <td className="py-2 pr-4">
-                                              <Badge
-                                                tone={
-                                                  a.label === "confirmed"
-                                                    ? "success"
-                                                    : a.label === "false_positive"
-                                                      ? "danger"
-                                                      : "default"
-                                                }
-                                              >
-                                                {a.label.replace("_", " ")}
-                                              </Badge>
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <Badge
+                                                  tone={
+                                                    a.label === "confirmed"
+                                                      ? "success"
+                                                      : a.label === "false_positive"
+                                                        ? "danger"
+                                                        : "default"
+                                                  }
+                                                >
+                                                  {a.label.replace("_", " ")}
+                                                </Badge>
+                                                {a.outcome && (
+                                                  <Badge tone={OUTCOME_TONE[a.outcome]}>{OUTCOME_LABEL[a.outcome]}</Badge>
+                                                )}
+                                              </div>
                                             </td>
                                             <td className="py-2 text-right">
                                               <div className="inline-flex gap-1">

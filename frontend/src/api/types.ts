@@ -56,13 +56,18 @@ export type PredictResult = {
   total_windows: number;
   anomaly_count: number;
   anomaly_rate: number;
+  has_labels: boolean;
   results: {
     batch_id: string;
     window_idx: number;
     score: number;
     is_anomaly: boolean;
+    actual: number | null;
   }[];
 };
+
+export type PredictBatchSummary = components["schemas"]["PredictBatchSummaryOut"];
+export type PredictBatchDetail = components["schemas"]["PredictBatchDetailOut"];
 
 export type SplitOptions = {
   n_rows: number;

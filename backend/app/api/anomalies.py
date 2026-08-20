@@ -22,6 +22,9 @@ class AnomalyOut(BaseModel):
     label: str
     note: Optional[str] = None
     created_at: str
+    # Ground-truth outcome (tp/fp/fn) when the predict batch had labels, else null.
+    outcome: Optional[str] = None
+    detection_source: str = "flagged"  # flagged | missed_ground_truth
 
 
 class LabelIn(BaseModel):
@@ -34,6 +37,7 @@ def list_anomalies(
     model_id: Optional[int] = Query(None),
     subject_id: Optional[int] = Query(None),
     label: Optional[str] = Query(None),
+    outcome: Optional[str] = Query(None, pattern="^(tp|fp|fn)$"),
     limit: int = Query(100, le=500),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -45,6 +49,8 @@ def list_anomalies(
     )
     if label:
         q = q.filter(AnomalyEvent.label == label)
+    if outcome:
+        q = q.filter(AnomalyEvent.outcome == outcome)
     if model_id is not None or subject_id is not None:
         q = q.join(Prediction, AnomalyEvent.prediction_id == Prediction.id)
         if model_id is not None:
@@ -65,6 +71,8 @@ def list_anomalies(
             label=e.label,
             note=e.note,
             created_at=e.created_at.isoformat(),
+            outcome=e.outcome,
+            detection_source=e.detection_source,
         )
         for e in q.all()
     ]
@@ -102,4 +110,6 @@ def label_anomaly(
         label=event.label,
         note=event.note,
         created_at=event.created_at.isoformat(),
+        outcome=event.outcome,
+        detection_source=event.detection_source,
     )
