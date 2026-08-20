@@ -112,6 +112,29 @@ class Threshold(Base):
     model = relationship("Model", back_populates="threshold")
 
 
+class ThresholdHistory(Base):
+    """Append-only log of every threshold state a Subject has been in --
+    one row per training/retrain calibration and per manual z-multiplier
+    edit -- so neither a z change nor a retrain on new data silently
+    overwrites what the threshold used to be."""
+
+    __tablename__ = "threshold_history"
+
+    id = Column(Integer, primary_key=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), index=True, nullable=False)
+    model_id = Column(Integer, ForeignKey("models.id", ondelete="CASCADE"), index=True, nullable=False)
+    mu = Column(Float, nullable=False)
+    sigma = Column(Float, nullable=False)
+    epsilon = Column(Float, nullable=False)
+    z_multiplier = Column(Float, nullable=False)
+    n_rows = Column(Integer)  # dataset rows used for this calibration; null for a pure z-multiplier edit
+    source = Column(String(30), nullable=False)  # trained | retrained | trained_alternative | z_updated
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    subject = relationship("Subject")
+    model = relationship("Model")
+
+
 class Prediction(Base):
     __tablename__ = "predictions"
 

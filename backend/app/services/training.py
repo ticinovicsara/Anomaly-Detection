@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from app.core.config import settings
-from app.db.models import Dataset, Model, Subject, Threshold
+from app.db.models import Dataset, Model, Subject, Threshold, ThresholdHistory
 from app.db.session import SessionLocal
 from app.ml_core.evaluation import coerce_binary_label, evaluate_on_test
 from app.ml_core.model_router import choose_model
@@ -129,6 +129,23 @@ def _metrics_with_evaluation(fit: dict) -> dict:
     return {**fit["metrics"], "evaluation": fit["evaluation"]}
 
 
+def _record_threshold_history(db, model_row: Model, thr: dict, source: str, n_rows: Optional[int]) -> None:
+    """One row per calibration (training/retrain) or per manual z edit, so
+    neither ever silently overwrites what the threshold used to be."""
+    db.add(
+        ThresholdHistory(
+            subject_id=model_row.subject_id,
+            model_id=model_row.id,
+            mu=thr["mu"],
+            sigma=thr["sigma"],
+            epsilon=thr["epsilon"],
+            z_multiplier=thr["z_multiplier"],
+            n_rows=n_rows,
+            source=source,
+        )
+    )
+
+
 def _train_impl(dataset_id: int, user_id: int) -> None:
     os.makedirs(settings.STORAGE_PATH, exist_ok=True)
     db = SessionLocal()
@@ -165,6 +182,7 @@ def _train_impl(dataset_id: int, user_id: int) -> None:
 
         thr = fit["threshold"]
         db.add(Threshold(model_id=model_row.id, mu=thr["mu"], sigma=thr["sigma"], epsilon=thr["epsilon"], z_multiplier=thr["z_multiplier"]))
+        _record_threshold_history(db, model_row, thr, source="trained", n_rows=len(df))
         db.commit()
     except Exception as exc:  # noqa: BLE001 - want to record any failure
         logger.exception("Training failed for dataset %s, user %s", dataset_id, user_id)
@@ -233,6 +251,7 @@ def _retrain_impl(subject_id: int, user_id: int, forced_algorithm: Optional[str]
 
         thr = fit["threshold"]
         db.add(Threshold(model_id=model_row.id, mu=thr["mu"], sigma=thr["sigma"], epsilon=thr["epsilon"], z_multiplier=thr["z_multiplier"]))
+        _record_threshold_history(db, model_row, thr, source="retrained", n_rows=len(df))
         db.commit()
 
         db.query(Model).filter_by(subject_id=subject.id).update({"is_active": False})
@@ -310,6 +329,7 @@ def _train_alternative_impl(subject_id: int, user_id: int, algorithm: str) -> di
 
         thr = fit["threshold"]
         db.add(Threshold(model_id=model_row.id, mu=thr["mu"], sigma=thr["sigma"], epsilon=thr["epsilon"], z_multiplier=thr["z_multiplier"]))
+        _record_threshold_history(db, model_row, thr, source="trained_alternative", n_rows=len(df))
         db.commit()
 
         return {"model_id": model_row.id, "algorithm": algorithm, "epsilon": thr["epsilon"]}

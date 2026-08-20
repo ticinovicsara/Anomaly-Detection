@@ -79,6 +79,97 @@ def test_subject_out_exposes_active_model_threshold_fields(client, auth_headers)
     assert body["active_z_multiplier"] == pytest.approx(3.0)
 
 
+def _make_subject_with_model(db, user, algorithm="IF"):
+    from app.db.models import Dataset, Model, Subject, Threshold
+
+    subject = Subject(user_id=user.id, name=f"Subject {algorithm}")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+
+    dataset = Dataset(user_id=user.id, subject_id=subject.id, name="d.csv", file_path="/tmp/d.csv", n_rows=10, n_features=1)
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+
+    model = Model(user_id=user.id, subject_id=subject.id, dataset_id=dataset.id, algorithm=algorithm, status="ready", is_active=True)
+    db.add(model)
+    db.commit()
+    db.refresh(model)
+
+    db.add(Threshold(model_id=model.id, mu=0.1, sigma=0.02, epsilon=0.16, z_multiplier=3.0))
+    db.commit()
+    return subject, model
+
+
+def test_threshold_history_empty_when_never_calibrated(client, auth_headers):
+    from app.db.models import User
+
+    db = TestingSession()
+    try:
+        user = db.query(User).first()
+        subject, _model = _make_subject_with_model(db, user)
+        subject_id = subject.id
+    finally:
+        db.close()
+
+    r = client.get(f"/subjects/{subject_id}/threshold-history", headers=auth_headers)
+    assert r.status_code == 200
+    # Threshold exists but no ThresholdHistory row was ever written for it
+    # (this Threshold was inserted directly by the test, not through the
+    # real training/z-update code paths) -- confirms the endpoint doesn't
+    # synthesize history that was never recorded.
+    assert r.json() == []
+
+
+def test_update_threshold_records_history_without_losing_the_old_value(client, auth_headers):
+    """The z-multiplier PATCH used to overwrite the Threshold row in place
+    with no trace of the previous z/epsilon. It should now append a
+    ThresholdHistory row instead of silently discarding the old state."""
+    from app.db.models import ThresholdHistory, User
+
+    db = TestingSession()
+    try:
+        user = db.query(User).first()
+        subject, model = _make_subject_with_model(db, user)
+        subject_id, model_id = subject.id, model.id
+    finally:
+        db.close()
+
+    r = client.patch(f"/settings/threshold/{model_id}", headers=auth_headers, json={"z_multiplier": 4.0})
+    assert r.status_code == 200, r.text
+    new_epsilon = r.json()["epsilon"]
+    assert new_epsilon == pytest.approx(0.1 + 4.0 * 0.02)
+
+    r = client.get(f"/subjects/{subject_id}/threshold-history", headers=auth_headers)
+    assert r.status_code == 200
+    entries = r.json()
+    assert len(entries) == 1
+    assert entries[0]["source"] == "z_updated"
+    assert entries[0]["z_multiplier"] == pytest.approx(4.0)
+    assert entries[0]["epsilon"] == pytest.approx(new_epsilon)
+    assert entries[0]["algorithm"] == "IF"
+    assert entries[0]["n_rows"] is None
+
+    db = TestingSession()
+    try:
+        rows = db.query(ThresholdHistory).filter_by(model_id=model_id).all()
+        assert len(rows) == 1
+    finally:
+        db.close()
+
+    # A second edit appends rather than overwrites -- both states stay visible.
+    r = client.patch(f"/settings/threshold/{model_id}", headers=auth_headers, json={"z_multiplier": 2.0})
+    assert r.status_code == 200, r.text
+
+    r = client.get(f"/subjects/{subject_id}/threshold-history", headers=auth_headers)
+    entries = r.json()
+    assert len(entries) == 2
+    # Newest first.
+    assert entries[0]["z_multiplier"] == pytest.approx(2.0)
+    assert entries[1]["z_multiplier"] == pytest.approx(4.0)
+
+
 def test_create_subject_duplicate_name_rejected(client, auth_headers):
     client.post("/subjects", headers=auth_headers, json={"name": "Patient 101"})
     r = client.post("/subjects", headers=auth_headers, json={"name": "Patient 101"})

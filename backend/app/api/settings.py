@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
-from app.db.models import Model, User
+from app.db.models import Model, ThresholdHistory, User
 from app.db.session import get_db
 from app.ml_core.threshold import recompute_epsilon
 
@@ -54,6 +54,21 @@ def update_threshold(
     t.z_multiplier = body.z_multiplier
     t.epsilon = recompute_epsilon(t.mu, t.sigma, body.z_multiplier)
     t.calibrated_at = datetime.utcnow()
+    # A z edit recalculates epsilon from the same mu/sigma (no new data) and
+    # would otherwise overwrite the previous z/epsilon with no trace of what
+    # it used to be -- log it so it shows up in that Subject's history.
+    db.add(
+        ThresholdHistory(
+            subject_id=m.subject_id,
+            model_id=m.id,
+            mu=t.mu,
+            sigma=t.sigma,
+            epsilon=t.epsilon,
+            z_multiplier=t.z_multiplier,
+            n_rows=None,
+            source="z_updated",
+        )
+    )
     db.commit()
     db.refresh(t)
     return ThresholdOut(

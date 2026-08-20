@@ -5,7 +5,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import current_user
-from app.db.models import AnomalyEvent, DataReviewCandidate, Dataset, Model, Prediction, Subject, User
+from app.db.models import (
+    AnomalyEvent,
+    DataReviewCandidate,
+    Dataset,
+    Model,
+    Prediction,
+    Subject,
+    ThresholdHistory,
+    User,
+)
 from app.db.session import get_db
 from app.services.data_review import ensure_review_candidates
 from app.services.subjects import get_active_model, set_active_model
@@ -51,9 +60,9 @@ class EvaluationOut(BaseModel):
     recall: float
     f1: float
     auc: Optional[float]
-    n_test_samples: int
-    n_test_positive: int
-    # Diagnostics-only; optional so older persisted evaluation blobs still parse.
+    # Optional so older persisted evaluation blobs still parse.
+    n_test_samples: Optional[int] = None
+    n_test_positive: Optional[int] = None
     epsilon: Optional[float] = None
     confusion: Optional[ConfusionOut] = None
     curve: Optional[list[CurvePointOut]] = None
@@ -118,6 +127,19 @@ class ModelOut(BaseModel):
 class SubjectDetailOut(SubjectOut):
     datasets: list[DatasetOut]
     models: list[ModelOut]
+
+
+class ThresholdHistoryOut(BaseModel):
+    id: int
+    model_id: int
+    algorithm: str
+    mu: float
+    sigma: float
+    epsilon: float
+    z_multiplier: float
+    n_rows: Optional[int]
+    source: str
+    created_at: str
 
 
 class TrainAlternativeIn(BaseModel):
@@ -312,6 +334,33 @@ def retrain_subject(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     return RetrainOut(**result)
+
+
+@router.get("/{subject_id}/threshold-history", response_model=list[ThresholdHistoryOut])
+def list_threshold_history(subject_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    subject = _owned_subject(db, subject_id, user)
+    rows = (
+        db.query(ThresholdHistory)
+        .options(joinedload(ThresholdHistory.model))
+        .filter(ThresholdHistory.subject_id == subject.id)
+        .order_by(ThresholdHistory.created_at.desc())
+        .all()
+    )
+    return [
+        ThresholdHistoryOut(
+            id=h.id,
+            model_id=h.model_id,
+            algorithm=h.model.algorithm,
+            mu=h.mu,
+            sigma=h.sigma,
+            epsilon=h.epsilon,
+            z_multiplier=h.z_multiplier,
+            n_rows=h.n_rows,
+            source=h.source,
+            created_at=h.created_at.isoformat(),
+        )
+        for h in rows
+    ]
 
 
 @router.post("/{subject_id}/data-review/precheck", response_model=list[DataReviewCandidateOut])

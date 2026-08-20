@@ -112,6 +112,7 @@ export type DataReviewCandidate = Omit<components["schemas"]["DataReviewCandidat
 
 export type SubjectModel = components["schemas"]["ModelOut"];
 export type SubjectDetail = components["schemas"]["SubjectDetailOut"];
+export type ThresholdHistoryEntry = components["schemas"]["ThresholdHistoryOut"];
 
 export type ExperimentStatistics = components["schemas"]["StatisticsOut"];
 export type CrossApplication = components["schemas"]["CrossApplicationOut"];

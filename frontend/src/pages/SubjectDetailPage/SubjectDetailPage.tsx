@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FlaskConical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Brain, ChevronLeft, ChevronRight, FlaskConical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Badge, statusTone } from "@/components/Badge";
@@ -23,20 +23,50 @@ import {
   thresholds,
   DataReviewCandidate,
   SubjectDetail as SubjectDetailType,
+  ThresholdHistoryEntry,
 } from "@/api/client";
 import { AdvancedModelsPanel } from "./AdvancedModelsPanel";
 import { PendingReviewCard } from "./PendingReviewCard";
+import { ThresholdHistoryPanel } from "./ThresholdHistoryPanel";
 import { timeAgo } from "./helpers";
+
+type OrderedSubject = { id: number; name: string };
 
 export default function SubjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const subjectId = Number(id);
   const nav = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const { enabled: advancedMode } = useAdvancedMode();
 
   const [subject, setSubject] = useState<SubjectDetailType | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Lets "Prev / Next" cycle through whatever list you arrived from -- the
+  // filtered set from Subjects if you clicked in from there, or the full
+  // list as a fallback (direct link, refresh, or arriving from Models/
+  // Experiments instead).
+  const [orderedSubjects, setOrderedSubjects] = useState<OrderedSubject[] | null>(
+    (location.state as { orderedSubjects?: OrderedSubject[] } | null)?.orderedSubjects ?? null,
+  );
+  useEffect(() => {
+    if (orderedSubjects !== null) return;
+    const controller = new AbortController();
+    subjectsApi
+      .list({ signal: controller.signal })
+      .then((r) => setOrderedSubjects(r.data.map((s) => ({ id: s.id, name: s.name }))))
+      .catch(() => {});
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const currentIndex = orderedSubjects?.findIndex((s) => s.id === subjectId) ?? -1;
+  const prevSubject = orderedSubjects && currentIndex > 0 ? orderedSubjects[currentIndex - 1] : null;
+  const nextSubject =
+    orderedSubjects && currentIndex >= 0 && currentIndex < orderedSubjects.length - 1
+      ? orderedSubjects[currentIndex + 1]
+      : null;
+  const goTo = (target: OrderedSubject) => nav(`/subjects/${target.id}`, { state: { orderedSubjects } });
 
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
@@ -58,6 +88,14 @@ export default function SubjectDetailPage() {
   const [trainingAlt, setTrainingAlt] = useState<"IF" | "LSTM" | null>(null);
   const [activatingModelId, setActivatingModelId] = useState<number | null>(null);
 
+  const [thresholdHistory, setThresholdHistory] = useState<ThresholdHistoryEntry[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const refreshHistory = () =>
+    subjectsApi
+      .thresholdHistory(subjectId)
+      .then((r) => setThresholdHistory(r.data))
+      .catch(() => {});
+
   const fetchDetail = async (signal?: AbortSignal) => {
     const r = await subjectsApi.detail(subjectId, { signal });
     setSubject(r.data);
@@ -67,6 +105,11 @@ export default function SubjectDetailPage() {
   };
 
   const isPending = (s: SubjectDetailType) => s.models.some((m) => m.status === "training" || m.status === "pending");
+
+  useEffect(() => {
+    refreshHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjectId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,7 +146,7 @@ export default function SubjectDetailPage() {
     };
   }, [subjectId]);
 
-  const refresh = () => fetchDetail().catch(() => {});
+  const refresh = () => Promise.all([fetchDetail().catch(() => {}), refreshHistory()]);
 
   if (loading) {
     return (
@@ -266,14 +309,55 @@ export default function SubjectDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/subjects" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-text">
-        <ArrowLeft className="h-4 w-4" /> Back to subjects
-      </Link>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Link to="/subjects" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-text">
+          <ArrowLeft className="h-4 w-4" /> Back to subjects
+        </Link>
+        {orderedSubjects && orderedSubjects.length > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => prevSubject && goTo(prevSubject)}
+              disabled={!prevSubject}
+              title={prevSubject ? `Previous: ${prevSubject.name}` : "No previous subject"}
+              className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            {currentIndex >= 0 && (
+              <span className="px-1 font-mono text-xs text-muted">
+                {currentIndex + 1} / {orderedSubjects.length}
+              </span>
+            )}
+            <button
+              onClick={() => nextSubject && goTo(nextSubject)}
+              disabled={!nextSubject}
+              title={nextSubject ? `Next: ${nextSubject.name}` : "No next subject"}
+              className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{subject.name}</h1>
           {subject.description && <p className="mt-1 text-sm text-muted">{subject.description}</p>}
+          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+            <Link
+              to={`/anomalies?subject_id=${subject.id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent"
+            >
+              <AlertTriangle className="h-3 w-3" /> Anomalies for this subject
+            </Link>
+            <Link
+              to={`/models?subject_id=${subject.id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted transition-colors hover:border-accent/40 hover:text-accent"
+            >
+              <Brain className="h-3 w-3" /> Models for this subject
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={openEdit} icon={<Pencil className="h-3.5 w-3.5" />}>
@@ -290,10 +374,10 @@ export default function SubjectDetailPage() {
         <h3 className="text-sm font-semibold text-text">Personalized threshold</h3>
         {activeModel?.status === "training" ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-muted">
-            <Spinner className="h-4 w-4" /> Training in progress — threshold will appear once calibration finishes.
+            <Spinner className="h-4 w-4" /> Training in progress - threshold will appear once calibration finishes.
           </p>
         ) : !activeModel || !activeModel.threshold ? (
-          <p className="mt-3 text-sm text-muted">No trained model yet — upload data or train to calibrate a threshold.</p>
+          <p className="mt-3 text-sm text-muted">No trained model yet - upload data or train to calibrate a threshold.</p>
         ) : (
           <>
             <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -315,6 +399,11 @@ export default function SubjectDetailPage() {
             </div>
           </>
         )}
+        <ThresholdHistoryPanel
+          history={thresholdHistory}
+          expanded={historyExpanded}
+          onToggleExpanded={() => setHistoryExpanded((v) => !v)}
+        />
       </Card>
 
       {/* Datasets */}
@@ -352,7 +441,7 @@ export default function SubjectDetailPage() {
           <>
             {activeModel.status === "training" && (
               <div className="mt-3 flex items-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-                <Spinner className="h-4 w-4" /> Training in progress for this Subject — this page updates automatically.
+                <Spinner className="h-4 w-4" /> Training in progress for this Subject - this page updates automatically.
               </div>
             )}
             <div className="mt-3 flex items-center gap-2">

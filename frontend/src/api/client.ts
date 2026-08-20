@@ -17,6 +17,7 @@ import type {
   Subject,
   SubjectDetail,
   SubjectModel,
+  ThresholdHistoryEntry,
   ThresholdResource,
 } from "./types";
 
@@ -197,6 +198,8 @@ export const subjects = {
     ),
   activateModel: (subjectId: number, modelId: number) =>
     api.post<SubjectModel>(`/subjects/${subjectId}/models/${modelId}/activate`),
+  thresholdHistory: (subjectId: number, opts?: RequestOpts) =>
+    api.get<ThresholdHistoryEntry[]>(`/subjects/${subjectId}/threshold-history`, { signal: opts?.signal }),
 };
 
 export const dataReview = {
