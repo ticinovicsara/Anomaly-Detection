@@ -1,30 +1,30 @@
 # Anomaly Detection System
 
-A web application for **personalized anomaly detection in sequential data** — built as part of the thesis _"Development of a Modular System for Personalized Anomaly Detection in Sequential Data."_
+A web application for **personalized anomaly detection in sequential data** - built as part of the thesis _"Development of a Modular System for Personalized Anomaly Detection in Sequential Data."_
 
-Most anomaly detectors apply one global threshold to every entity they monitor, implicitly assuming "normal" means the same thing for everyone. It usually doesn't: a heart rate range that's unremarkable for one patient can be a warning sign for another. This system calibrates a **personalized threshold** (`ε = μ + 3σ`) per **Subject** — the entity being monitored (a patient, a card, a server) — from that Subject's own data, and automatically picks between Isolation Forest and an LSTM Autoencoder based on the statistical shape of whatever CSV is uploaded, without any domain-specific code.
+Most anomaly detectors apply one global threshold to every entity they monitor, implicitly assuming "normal" means the same thing for everyone. It usually doesn't: a heart rate range that's unremarkable for one patient can be a warning sign for another. This system calibrates a **personalized threshold** (`ε = μ + 3σ`) per **Subject** - the entity being monitored (a patient, a card, a server) - from that Subject's own data, and automatically picks between Isolation Forest and an LSTM Autoencoder based on the statistical shape of whatever CSV is uploaded, without any domain-specific code.
 
 ## Core ideas
 
-- **`User` vs `Subject`.** A `User` is just a login. A `Subject` is what personalization is calibrated for. One `User` can own many Subjects (e.g. a doctor tracking 30 patients) — each gets its own model and its own threshold, never blended together.
+- **`User` vs `Subject`.** A `User` is just a login. A `Subject` is what personalization is calibrated for. One `User` can own many Subjects (e.g. a doctor tracking 30 patients) - each gets its own model and its own threshold, never blended together.
 - **Automatic model selection.** A data profiler extracts autocorrelation, dominant frequency (FFT), and stationarity (ADF) from an upload; a transparent rule-based router picks Isolation Forest or an LSTM Autoencoder and records _why_. The user never chooses an algorithm (an "Advanced mode" escape hatch exists for manual override/comparison).
-- **Dataset-agnostic by design.** The ML core (`backend/app/ml_core/`) never knows what dataset it's looking at — MIT-BIH ECG records, Credit Card Fraud, Yahoo S5, or an arbitrary CSV all go through the same profiler → router → train → calibrate pipeline.
-- **Optional supervised evaluation.** If a CSV has a binary ground-truth anomaly column, marking it at upload time yields real precision/recall/F1/AU-ROC on a held-out test split, evaluated at the model's actual production threshold — otherwise the system stays fully unsupervised, as before.
+- **Dataset-agnostic by design.** The ML core (`backend/app/ml_core/`) never knows what dataset it's looking at - MIT-BIH ECG records, Credit Card Fraud, Yahoo S5, or an arbitrary CSV all go through the same profiler → router → train → calibrate pipeline.
+- **Optional supervised evaluation.** If a CSV has a binary ground-truth anomaly column, marking it at upload time yields real precision/recall/F1/AU-ROC on a held-out test split, evaluated at the model's actual production threshold - otherwise the system stays fully unsupervised, as before.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph presentation["Presentation — React 18 + TypeScript + Vite"]
+    subgraph presentation["Presentation - React 18 + TypeScript + Vite"]
         UI["Subjects · Upload · Models · Anomalies\nExperiments · Model Diagnostics · Settings"]
     end
 
-    subgraph application["Application — FastAPI"]
+    subgraph application["Application - FastAPI"]
         API["Routers: auth · upload · train · predict\nanomalies · subjects · experiments · settings"]
         SVC["Services: training · dataset_splitter\nexperiments · subjects · prediction"]
     end
 
-    subgraph ml["ML core — no FastAPI/DB dependency"]
+    subgraph ml["ML core - no FastAPI/DB dependency"]
         PROF["Data profiler\n(autocorr, FFT, ADF)"]
         ROUTER["Model router\n(rule-based)"]
         MODELS["Isolation Forest\nLSTM Autoencoder"]
@@ -44,7 +44,7 @@ flowchart TB
     SVC --> FS
 ```
 
-**Why this split:** `ml_core/` has no dependency on FastAPI or SQLAlchemy, so it's trivially unit-testable and swappable. Background training runs as a `BackgroundTasks` job under a single-slot lock — no Redis/Celery broker needed at this scale.
+**Why this split:** `ml_core/` has no dependency on FastAPI or SQLAlchemy, so it's trivially unit-testable and swappable. Background training runs as a `BackgroundTasks` job under a single-slot lock - no Redis/Celery broker needed at this scale.
 
 ## Tech stack
 
@@ -59,7 +59,7 @@ flowchart TB
 
 ## Quick start
 
-### Option A — Docker Compose (fastest)
+### Option A - Docker Compose (fastest)
 
 ```bash
 git clone <this-repo-url>
@@ -72,14 +72,14 @@ That builds and starts PostgreSQL, the backend (migrations run automatically on 
 - Frontend: **http://localhost:8080**
 - Backend API / Swagger docs: **http://localhost:3000/docs**
 
-Set a real `JWT_SECRET` before running this anywhere beyond a local demo — the backend logs a startup warning if it's left at the default:
+Set a real `JWT_SECRET` before running this anywhere beyond a local demo - the backend logs a startup warning if it's left at the default:
 
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up --build
 ```
 
-### Option B — Local dev (hot reload)
+### Option B - Local dev (hot reload)
 
 ```bash
 # 1. Database only
@@ -101,6 +101,32 @@ npm run dev                                            # http://localhost:5173
 
 The frontend dev server proxies `/api/*` to the backend (see `frontend/vite.config.ts`). If port 3000 is unusable on your machine (Windows sometimes reserves ports in its excluded range), set `VITE_BACKEND_PORT=<port>` in `frontend/.env.local` and start the backend on that port instead (`uvicorn app.main:app --reload --port <port>`).
 
+## Usage walkthrough
+
+Once both servers are running (frontend + backend), the typical flow through the UI is:
+
+1. **Register / log in** (`/register`, `/login`).
+2. **Upload a CSV** (`/upload`). If the file has an ID column or a time period worth splitting into several Subjects (e.g. one column per patient), the upload flow offers to split it; otherwise it becomes (or joins) a single Subject. If a column is a binary ground-truth anomaly label, mark it here to unlock optional supervised evaluation later.
+3. **Training kicks off automatically** - the profiler inspects the data and the router picks Isolation Forest or an LSTM Autoencoder, recording why. No algorithm choice is required unless you enable **Advanced mode** in Settings.
+4. **Subject detail page** (`/subjects/{id}`) - once trained, this shows the personalized threshold `ε`, a z-multiplier slider (with live preview before saving), a full history of every calibration and z-edit, retrain-on-latest-data, and (in Advanced mode) manual algorithm comparison.
+5. **Models page** (`/models`) - every model grouped by Subject. Use **Predict** to score a new CSV against a trained model; if that CSV includes a `label` column, the result is also compared against ground truth (see next step).
+6. **Model diagnostics** (`/models/{id}/diagnostics`) - precision/recall/F1/AU-ROC on the held-out training-time test split, a confusion matrix, and a zoomable predicted-vs-actual chart with click-to-filter categories. Any labeled Predict runs from step 5 show up here too, under "Labeled test runs", each with its own chart.
+7. **Anomalies page** (`/anomalies`) - every flagged window, grouped by Subject then by episode (overlapping windows from the same real event collapse into one row). Confirm, mark false positive, or (when ground truth is known) filter by correct / false alarm / missed.
+8. **Experiments page** (`/experiments`) - run the personalization experiment across two or more Subjects to see the measured impact of a shared global threshold vs. each Subject's own, or try the synthetic preset demo without uploading anything.
+9. **Dashboard** (`/`) - overview of recent anomalies, trained models, and (once 2+ Subjects are trained) the threshold spread across them.
+
+## Screenshots
+
+_Add a few screenshots here to give reviewers a quick visual tour before they clone the repo - e.g. the Dashboard, a Subject detail page with its threshold history, and the Model diagnostics chart._
+
+```markdown
+![Dashboard](docs/screenshots/dashboard.png)
+![Subject detail - personalized threshold and history](docs/screenshots/subject-detail.png)
+![Model diagnostics - confusion matrix and predicted-vs-actual chart](docs/screenshots/model-diagnostics.png)
+```
+
+Save the image files under `docs/screenshots/` (create the folder if it doesn't exist yet) and drop the same three lines outside this code fence - GitHub renders them automatically once committed.
+
 ## Environment variables
 
 Backend (`backend/.env`, see `backend/.env.example`):
@@ -108,12 +134,12 @@ Backend (`backend/.env`, see `backend/.env.example`):
 | Variable             | Default                                                      | Notes                                                                                          |
 | -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`       | `postgresql://anomaly:anomaly_dev@localhost:5432/anomaly_db` | Use `db:5432` (not the host-mapped `5433`) when running via Docker Compose                     |
-| `JWT_SECRET`         | `dev_secret_change_me`                                       | **Must** be overridden outside local dev — logged as a startup warning otherwise               |
+| `JWT_SECRET`         | `dev_secret_change_me`                                       | **Must** be overridden outside local dev - logged as a startup warning otherwise               |
 | `JWT_ALGORITHM`      | `HS256`                                                      |                                                                                                |
 | `JWT_EXPIRE_MINUTES` | `1440`                                                       |                                                                                                |
 | `STORAGE_PATH`       | `./models_storage`                                           | Where trained models/scalers/uploaded CSVs are persisted                                       |
 | `FRONTEND_ORIGIN`    | `http://localhost:5173`                                      | CORS allow-origin                                                                              |
-| `SMTP_*`             | —                                                            | Reserved for a planned notifications feature (see Status below) — not yet consumed by any code |
+| `SMTP_*`             | -                                                            | Reserved for a planned notifications feature (see Status below) - not yet consumed by any code |
 
 Frontend (`frontend/.env` / `.env.local`):
 
@@ -150,8 +176,8 @@ Anomaly-Detection/
 ## API reference
 
 - Interactive Swagger UI: `http://localhost:3000/docs` (or ReDoc at `/redoc`) once the backend is running
-- `backend/postman_collection.json` — importable collection covering the full register → upload → train → predict → anomalies flow
-- Frontend TypeScript types are generated from the backend's OpenAPI schema, not hand-maintained — see `frontend/README.md` for the regeneration workflow whenever a backend schema changes
+- `backend/postman_collection.json` - importable collection covering the full register → upload → train → predict → anomalies flow
+- Frontend TypeScript types are generated from the backend's OpenAPI schema, not hand-maintained - see `frontend/README.md` for the regeneration workflow whenever a backend schema changes
 
 ## Running tests
 
@@ -173,4 +199,4 @@ npm run build      # production build
 
 **Implemented:** auth, Subject-based data model, upload with optional dataset splitting (by ID column or time period), automatic model selection, IF + LSTM training and prediction, personalized threshold calibration with a manual z-multiplier override, the Personalization Experiment (ch. 7.4 empirical proof, plus a synthetic preset demo), Advanced mode (manual algorithm selection / comparison), optional supervised evaluation (precision/recall/F1/AU-ROC, confusion matrix, per-model diagnostics page) with cross-Subject aggregation, rate limiting and upload validation hardening.
 
-**Deliberately out of scope for this thesis, documented as future work:** concept drift monitoring (`Model.drift_status` exists in the schema but nothing computes it yet — see ch. 7.5), email/push notifications, scheduled PDF reports, a hybrid curated/Kaggle data-source picker, and CI/CD. None of these affect the personalization/modularity claims the system exists to demonstrate.
+**Deliberately out of scope for this thesis, documented as future work:** concept drift monitoring (`Model.drift_status` exists in the schema but nothing computes it yet - see ch. 7.5), email/push notifications, scheduled PDF reports, a hybrid curated/Kaggle data-source picker, and CI/CD. None of these affect the personalization/modularity claims the system exists to demonstrate.
