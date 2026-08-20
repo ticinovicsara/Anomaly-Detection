@@ -20,6 +20,11 @@ export function Modal({
   const titleId = useId();
   const reduceMotion = useReducedMotion();
 
+  // Separate from the keydown-listener effect below: `onClose` is usually an
+  // inline closure that gets a new identity on every parent re-render (e.g.
+  // typing in a form field inside the modal), so it must not be a dependency
+  // here -- otherwise this steals focus back to the first focusable element
+  // on every keystroke instead of only when the modal opens.
   useEffect(() => {
     if (!open) return;
 
@@ -28,6 +33,15 @@ export function Modal({
     const focusables = container?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
     (focusables?.[0] ?? container)?.focus();
 
+    return () => {
+      previouslyFocused?.focus();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const container = dialogRef.current;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
@@ -47,10 +61,7 @@ export function Modal({
       }
     };
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      previouslyFocused?.focus();
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   return (
