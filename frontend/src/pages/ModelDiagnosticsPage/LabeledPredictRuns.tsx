@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, FlaskConical } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Spinner } from "@/components/Spinner";
-import { predict as predictApi, PredictBatchDetail, PredictBatchSummary } from "@/api/client";
+import { models as predictApi, PredictBatchDetail, PredictBatchSummary } from "@/api/client";
 import { ConfusionMatrix } from "./ConfusionMatrix";
 import { PredictedVsActualChart } from "./PredictedVsActualChart";
 import { outcomeOf } from "./helpers";
