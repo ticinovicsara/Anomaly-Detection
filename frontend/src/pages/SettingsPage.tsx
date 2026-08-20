@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Save, Sliders, Sun, Moon, Wrench } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { Checkbox } from "@/components/Checkbox";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Slider } from "@/components/Slider";
@@ -170,12 +171,7 @@ export default function SettingsPage() {
         </h3>
         <Card>
           <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 accent-accent"
-              checked={advancedMode}
-              onChange={toggleAdvancedMode}
-            />
+            <Checkbox className="mt-0.5" checked={advancedMode} onChange={toggleAdvancedMode} />
             <div>
               <span className="text-sm font-medium text-text">Show manual algorithm selection</span>
               <p className="mt-0.5 text-xs text-muted">

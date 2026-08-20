@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { UploadCloud, FileText } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { Checkbox } from "@/components/Checkbox";
 import { Input } from "@/components/Input";
 import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
@@ -470,9 +471,8 @@ export default function UploadPage() {
               {labelColumns.length > 0 && (
                 <Card>
                   <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 accent-accent"
+                    <Checkbox
+                      className="mt-0.5"
                       checked={useLabelColumn}
                       onChange={(e) => {
                         setUseLabelColumn(e.target.checked);
