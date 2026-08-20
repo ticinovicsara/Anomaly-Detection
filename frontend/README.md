@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Runs at http://localhost:5173. It proxies `/api/*` to `http://localhost:8000` (see `vite.config.ts`), so the backend must be running. If port 8000 isn't usable on your machine (Windows sometimes reserves it), set `VITE_BACKEND_PORT=<port>` in `frontend/.env.local` and start the backend on that port instead.
+Runs at http://localhost:5173. It proxies `/api/*` to `http://localhost:3000` (see `vite.config.ts`), so the backend must be running. If port 3000 isn't usable on your machine (Windows sometimes reserves ports in its excluded range), set `VITE_BACKEND_PORT=<port>` in `frontend/.env.local` and start the backend on that port instead.
 
 ## Build
 

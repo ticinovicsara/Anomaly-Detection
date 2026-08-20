@@ -34,10 +34,10 @@ RUN mkdir -p /app/models_storage \
 
 USER app
 
-EXPOSE 8000
+EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)" || exit 1
+    CMD python -c "import urllib.request as u; u.urlopen('http://localhost:3000/health', timeout=3)" || exit 1
 
 # Applies pending Alembic migrations before the API starts serving traffic.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 3000"]

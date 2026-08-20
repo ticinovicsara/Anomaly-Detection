@@ -70,7 +70,7 @@ docker compose up --build
 That builds and starts PostgreSQL, the backend (migrations run automatically on container start), and the frontend behind nginx.
 
 - Frontend: **http://localhost:8080**
-- Backend API / Swagger docs: **http://localhost:8000/docs**
+- Backend API / Swagger docs: **http://localhost:3000/docs**
 
 Set a real `JWT_SECRET` before running this anywhere beyond a local demo — the backend logs a startup warning if it's left at the default:
 
@@ -91,7 +91,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 cp .env.example .env                                 # edit DATABASE_URL/JWT_SECRET if needed
 alembic upgrade head
-uvicorn app.main:app --reload                         # http://localhost:8000
+uvicorn app.main:app --reload --port 3000              # http://localhost:3000
 
 # 3. Frontend (separate terminal)
 cd frontend
@@ -99,7 +99,7 @@ npm install
 npm run dev                                            # http://localhost:5173
 ```
 
-The frontend dev server proxies `/api/*` to the backend (see `frontend/vite.config.ts`). If port 8000 is unusable on your machine (Windows sometimes reserves it), set `VITE_BACKEND_PORT=<port>` in `frontend/.env.local` and start the backend on that port instead.
+The frontend dev server proxies `/api/*` to the backend (see `frontend/vite.config.ts`). If port 3000 is unusable on your machine (Windows sometimes reserves ports in its excluded range), set `VITE_BACKEND_PORT=<port>` in `frontend/.env.local` and start the backend on that port instead (`uvicorn app.main:app --reload --port <port>`).
 
 ## Environment variables
 
@@ -119,7 +119,7 @@ Frontend (`frontend/.env` / `.env.local`):
 
 | Variable            | Default | Notes                                                                                                                |
 | ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| `VITE_BACKEND_PORT` | `8000`  | Dev-proxy target port only; irrelevant in the Docker Compose build (nginx proxies to the `backend` service directly) |
+| `VITE_BACKEND_PORT` | `3000`  | Dev-proxy target port only; irrelevant in the Docker Compose build (nginx proxies to the `backend` service directly) |
 
 ## Project structure
 
@@ -149,7 +149,7 @@ Anomaly-Detection/
 
 ## API reference
 
-- Interactive Swagger UI: `http://localhost:8000/docs` (or ReDoc at `/redoc`) once the backend is running
+- Interactive Swagger UI: `http://localhost:3000/docs` (or ReDoc at `/redoc`) once the backend is running
 - `backend/postman_collection.json` — importable collection covering the full register → upload → train → predict → anomalies flow
 - Frontend TypeScript types are generated from the backend's OpenAPI schema, not hand-maintained — see `frontend/README.md` for the regeneration workflow whenever a backend schema changes
 

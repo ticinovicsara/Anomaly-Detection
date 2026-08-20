@@ -30,18 +30,18 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
     ports:
-      # Host port is overridable -- Windows sometimes reserves 8000 in its
-      # excluded port range (same issue frontend/vite.config.ts already
-      # works around for local dev). Set BACKEND_HOST_PORT in a repo-root
-      # .env if 8000 isn't free on your machine.
-      - "${BACKEND_HOST_PORT:-8000}:8000"
+      # Host port is overridable -- Windows sometimes reserves a default
+      # port in its excluded port range (same issue frontend/vite.config.ts
+      # already works around for local dev). Set BACKEND_HOST_PORT in a
+      # repo-root .env if 3000 isn't free on your machine.
+      - "${BACKEND_HOST_PORT:-3000}:3000"
     volumes:
       - models_storage:/app/models_storage
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:3000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10

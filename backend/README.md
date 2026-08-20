@@ -30,11 +30,11 @@ copy .env.example .env      # Windows
 alembic upgrade head
 
 # 6. Start the server
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 3000
 ```
 
-Server runs at http://localhost:8000
-Swagger docs at http://localhost:8000/docs
+Server runs at http://localhost:3000
+Swagger docs at http://localhost:3000/docs
 Postman collection: `postman_collection.json` in this folder.
 
 ## Endpoints (verify order in Postman)
