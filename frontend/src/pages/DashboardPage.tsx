@@ -88,7 +88,7 @@ export default function DashboardPage() {
 
       {/* Stats */}
       <StaggerGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StaggerItem>
+        <StaggerItem className="h-full">
           <StatCard
             label="Anomalies today"
             value={inLast(1)}
@@ -96,10 +96,10 @@ export default function DashboardPage() {
             icon={<AlertTriangle className="h-5 w-5" />}
           />
         </StaggerItem>
-        <StaggerItem>
+        <StaggerItem className="h-full">
           <StatCard label="Past 7 days" value={inLast(7)} icon={<Activity className="h-5 w-5" />} />
         </StaggerItem>
-        <StaggerItem>
+        <StaggerItem className="h-full">
           <StatCard
             label="Trained models"
             value={readyModels.length}
@@ -107,8 +107,8 @@ export default function DashboardPage() {
             icon={<Brain className="h-5 w-5" />}
           />
         </StaggerItem>
-        <StaggerItem>
-          <Link to="/subjects">
+        <StaggerItem className="h-full">
+          <Link to="/subjects" className="block h-full">
             <StatCard label="Subjects" value={subjects.length} icon={<Users className="h-5 w-5" />} />
           </Link>
         </StaggerItem>
@@ -231,7 +231,8 @@ export default function DashboardPage() {
           </div>
           <p className="mt-4 text-xs text-muted">
             Range: {minEpsilon.toFixed(4)} – {maxEpsilon.toFixed(4)}
-            {spreadRatio !== null && ` (${spreadRatio.toFixed(1)}× spread)`} — personalization is visibly non-trivial.
+            {spreadRatio !== null && ` (${spreadRatio.toFixed(1)}× spread)`}, showing personalization is far from
+            marginal.
           </p>
         </Card>
       )}

@@ -62,8 +62,8 @@ export function ThresholdHistogram({ result, onExport }: Props) {
       </div>
       <p className="mt-3 text-xs text-muted">
         Range: {result.statistics.min.toFixed(4)} – {result.statistics.max.toFixed(4)}
-        {result.statistics.range_ratio !== null && ` (${result.statistics.range_ratio.toFixed(1)}× spread)`} —
-        personalization is visibly non-trivial.
+        {result.statistics.range_ratio !== null && ` (${result.statistics.range_ratio.toFixed(1)}× spread)`}, showing
+        personalization is far from marginal.
       </p>
     </Card>
   );

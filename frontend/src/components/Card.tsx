@@ -47,19 +47,19 @@ export function StatCard({
   const displayValue = numericValue !== null ? animatedValue : value;
 
   return (
-    <Card hoverable>
+    <Card hoverable className="flex h-full flex-col justify-between">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
           <p className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", toneClasses)}>
             {displayValue}
           </p>
-          {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
         </div>
         {icon && (
           <div className="rounded-xl bg-surface-2 p-2.5 text-accent">{icon}</div>
         )}
       </div>
+      <p className="mt-1 min-h-[1em] text-xs text-muted">{hint}</p>
     </Card>
   );
 }
