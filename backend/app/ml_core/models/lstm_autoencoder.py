@@ -16,7 +16,12 @@ class LSTMAutoencoder(AnomalyModel):
         self.window_size = window_size
         self.n_features = n_features
         self.latent_dim = latent_dim
-        self.model = self._build()
+        # Deliberately NOT built here -- callers that immediately follow
+        # construction with load() (e.g. every prediction/scoring call)
+        # would otherwise pay for a full graph build that gets thrown away
+        # a moment later. Built lazily in train() instead, the only path
+        # that actually needs a fresh, untrained graph.
+        self.model = None
 
     def _build(self):
         import tensorflow as tf
@@ -32,6 +37,8 @@ class LSTMAutoencoder(AnomalyModel):
         return model
 
     def train(self, X: np.ndarray, epochs: int = 20, batch_size: int = 64, verbose: int = 0) -> None:
+        if self.model is None:
+            self.model = self._build()
         X = X.astype("float32")
         self.model.fit(X, X, epochs=epochs, batch_size=batch_size, verbose=verbose)
 
@@ -46,4 +53,9 @@ class LSTMAutoencoder(AnomalyModel):
 
     def load(self, path: str) -> None:
         import tensorflow as tf
+        # Repeated loads in the same long-lived process (e.g. scoring many
+        # Subjects in a loop, see services/experiments.py) otherwise leave
+        # each prior graph behind, making every subsequent load/predict
+        # progressively slower.
+        tf.keras.backend.clear_session()
         self.model = tf.keras.models.load_model(path)
