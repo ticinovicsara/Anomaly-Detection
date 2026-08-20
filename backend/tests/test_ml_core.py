@@ -1,4 +1,4 @@
-"""Tests for the pure ML modules — no DB, no FastAPI."""
+"""Tests for the pure ML modules - no DB, no FastAPI."""
 import numpy as np
 import pandas as pd
 

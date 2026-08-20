@@ -45,7 +45,7 @@ export function CrossApplicationImpact({ result }: Props) {
         </div>
       </div>
       <p className="mt-4 text-xs text-muted">
-        Personalized thresholds eliminate both by construction — each subject is scored only against its own
+        Personalized thresholds eliminate both by construction - each subject is scored only against its own
         calibrated ε, never the population average.
       </p>
 

@@ -2,7 +2,7 @@ import { Evaluation } from "@/api/client";
 
 export function EvaluationStats({ evaluation }: { evaluation: Evaluation | null | undefined }) {
   if (!evaluation) {
-    return <p className="text-xs text-muted">N/A — dataset has no labeled anomalies</p>;
+    return <p className="text-xs text-muted">N/A - dataset has no labeled anomalies</p>;
   }
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

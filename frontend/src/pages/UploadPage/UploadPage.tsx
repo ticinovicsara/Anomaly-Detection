@@ -487,7 +487,7 @@ export default function UploadPage() {
                       <p className="mt-1 text-xs text-muted">
                         If a column already labels which rows are anomalies, the
                         trained model can be evaluated against it (precision,
-                        recall, F1, AU-ROC) on held-out data. Off by default —
+                        recall, F1, AU-ROC) on held-out data. Off by default -
                         everything works the same without it.
                       </p>
                       {useLabelColumn && (

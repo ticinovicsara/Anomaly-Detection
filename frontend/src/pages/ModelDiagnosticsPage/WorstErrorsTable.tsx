@@ -13,7 +13,7 @@ export function WorstErrorsTable({ errors }: { errors: ErrorRow[] }) {
         Where the model disagreed with the label, sorted by how confidently wrong it was.
       </p>
       {errors.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">No misclassifications in the sampled curve — looks clean.</p>
+        <p className="mt-3 text-sm text-muted">No misclassifications in the sampled curve - looks clean.</p>
       ) : (
         <div className="mt-4 overflow-x-auto -mx-6">
           <table className="w-full text-sm">

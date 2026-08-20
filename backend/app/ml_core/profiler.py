@@ -2,7 +2,7 @@
 
 Extracts a small set of characteristics from a user-uploaded dataframe
 without training anything. Every step is wrapped in try/except and returns
-None on failure — real CSVs have missing values, string columns, no time
+None on failure - real CSVs have missing values, string columns, no time
 index, or one row of data, and the profiler must never crash the request.
 """
 from typing import Any, Callable, Dict, Optional

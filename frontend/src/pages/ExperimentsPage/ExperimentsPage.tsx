@@ -163,7 +163,7 @@ export default function ExperimentsPage() {
         <h3 className="text-sm font-semibold text-text">Or: try a preset demo</h3>
         <p className="mt-1 text-sm text-muted">
           Generates 10 synthetic subjects sharing the same underlying signal structure but different noise
-          levels, trains an LSTM Autoencoder independently on each, and runs the experiment across them — a
+          levels, trains an LSTM Autoencoder independently on each, and runs the experiment across them - a
           quick way to see the argument without uploading real data first.
         </p>
         <div className="mt-4">
@@ -192,7 +192,7 @@ export default function ExperimentsPage() {
 
           {"created_subject_ids" in result && (
             <p className="text-xs text-muted">
-              Demo subjects were added to your account — view them on the{" "}
+              Demo subjects were added to your account - view them on the{" "}
               <Link to="/subjects" className="text-accent hover:underline">
                 Subjects page
               </Link>

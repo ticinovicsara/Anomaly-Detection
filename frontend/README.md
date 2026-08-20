@@ -25,7 +25,7 @@ npx tsc --noEmit   # type-check only, no build output
 
 ## Structure
 
-`@/*` is aliased to `src/*` (see `vite.config.ts` + `tsconfig.app.json`) — imports use `@/components/Button`, not relative `../../` paths. Folders with more than a couple of exportable modules have an `index.ts` barrel (`components/`, `hooks/`, and each foldered page).
+`@/*` is aliased to `src/*` (see `vite.config.ts` + `tsconfig.app.json`) - imports use `@/components/Button`, not relative `../../` paths. Folders with more than a couple of exportable modules have an `index.ts` barrel (`components/`, `hooks/`, and each foldered page).
 
 ```
 src/
@@ -50,7 +50,7 @@ src/
     └── SettingsPage.tsx         # theme toggle + z-multiplier slider per model
 ```
 
-Pages with genuine internal complexity (extracted sub-components, local helpers) get their own folder + `index.ts` re-export; single-screen pages stay as one flat `XxxPage.tsx` file. Several pages are route-level `lazy()`-loaded in `App.tsx` for code splitting, so nothing re-exports all of `pages/` from one barrel — that would collapse them back into a single chunk.
+Pages with genuine internal complexity (extracted sub-components, local helpers) get their own folder + `index.ts` re-export; single-screen pages stay as one flat `XxxPage.tsx` file. Several pages are route-level `lazy()`-loaded in `App.tsx` for code splitting, so nothing re-exports all of `pages/` from one barrel - that would collapse them back into a single chunk.
 
 ## Design tokens
 
@@ -60,7 +60,7 @@ Accent color is blue (`#3B82F6` in dark, `#2563EB` in light). Swap `--accent` an
 
 ## Keeping API types in sync with the backend
 
-`src/types/api.generated.ts` is generated from the backend's actual OpenAPI schema (`openapi-typescript`), not hand-maintained — most types in `src/api/client.ts` are aliased from it (`components["schemas"]["SubjectOut"]`, etc.) so they can't silently drift from what the backend actually returns.
+`src/types/api.generated.ts` is generated from the backend's actual OpenAPI schema (`openapi-typescript`), not hand-maintained - most types in `src/api/client.ts` are aliased from it (`components["schemas"]["SubjectOut"]`, etc.) so they can't silently drift from what the backend actually returns.
 
 **Whenever a backend Pydantic schema changes** (a field added/removed/retyped on any `response_model` in `backend/app/api/*.py`):
 
@@ -78,9 +78,9 @@ npx tsc --noEmit
 git add src/types/api.generated.ts
 ```
 
-This is a manual step, not a CI gate — there's no pre-commit hook enforcing it at this project's scale. If a type error shows up after step 3, it means frontend code was relying on a backend field/shape that just changed; fix the frontend usage, don't just silence the error.
+This is a manual step, not a CI gate - there's no pre-commit hook enforcing it at this project's scale. If a type error shows up after step 3, it means frontend code was relying on a backend field/shape that just changed; fix the frontend usage, don't just silence the error.
 
-**Not everything is generated.** A handful of endpoints have no `response_model` declared on the backend (`/upload`, `/upload/analyze`, `/upload/commit`, `/predict/{id}`, `/train/{id}`, `/train/models`) — their response shapes are invisible to OpenAPI, so the corresponding frontend types (`Profile`, `AnalyzeResult`, `CommitResult`, `PredictResult`, `ModelInfo`, `ModelMetrics`) stay hand-written in `client.ts`, each with a comment noting why. Adding `response_model` to those routes would make FastAPI validate/serialize real responses against a new schema — a behavior change, not something to do as part of a types refresh.
+**Not everything is generated.** A handful of endpoints have no `response_model` declared on the backend (`/upload`, `/upload/analyze`, `/upload/commit`, `/predict/{id}`, `/train/{id}`, `/train/models`) - their response shapes are invisible to OpenAPI, so the corresponding frontend types (`Profile`, `AnalyzeResult`, `CommitResult`, `PredictResult`, `ModelInfo`, `ModelMetrics`) stay hand-written in `client.ts`, each with a comment noting why. Adding `response_model` to those routes would make FastAPI validate/serialize real responses against a new schema - a behavior change, not something to do as part of a types refresh.
 
 ## Notes
 

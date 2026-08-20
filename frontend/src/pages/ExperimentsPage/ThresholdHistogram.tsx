@@ -28,7 +28,7 @@ export function ThresholdHistogram({ result, onExport }: Props) {
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text">Results — threshold histogram</h3>
+        <h3 className="text-sm font-semibold text-text">Results - threshold histogram</h3>
         <Button variant="ghost" size="sm" onClick={onExport} icon={<Download className="h-3.5 w-3.5" />}>
           Export as JSON
         </Button>
